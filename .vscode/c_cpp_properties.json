@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "D:/MSPM0/Projects/VSCode_test/User/inc",
+                "D:/ArmGCC/arm-none-eabi/include",
+                "D:/ArmGCC/lib/gcc/arm-none-eabi/14.3.1/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "DeviceFamily_MSPM0G350X",
+                "__GNUC__"
+            ],
+            "compilerPath": "D:/ArmGCC/bin/arm-none-eabi-gcc.exe",
+            "compileCommands": [
+                "${workspaceFolder}/build/Debug/compile_commands.json"
+            ]
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,165 @@
+{
+  "name": "VSCode_test",
+  "type": "ARM",
+  "dependenceList": [],
+  "srcDirs": [
+    "Driver",
+    "User"
+  ],
+  "virtualFolder": {
+    "name": "<virtual_root>",
+    "files": [],
+    "folders": []
+  },
+  "outDir": "build",
+  "deviceName": "MSPM0G3507",
+  "packDir": ".pack/TexasInstruments/MSPM0G1X0X_G3X0X_DFP.1.3.1",
+  "miscInfo": {
+    "uid": "bf9ffe20e9381e261e7bf1ec805ee94b"
+  },
+  "targets": {
+    "Debug": {
+      "excludeList": [],
+      "toolchain": "GCC",
+      "compileConfig": {
+        "cpuType": "Cortex-M0+",
+        "archExtensions": "",
+        "floatingPointHardware": "none",
+        "scatterFilePath": "mspm0g3507.lds",
+        "useCustomScatterFile": true,
+        "storageLayout": {
+          "RAM": [],
+          "ROM": []
+        },
+        "options": "null"
+      },
+      "uploader": "OpenOCD",
+      "uploadConfig": {
+        "bin": "build\\Debug\\VSCode_test.hex",
+        "target": "ti_mspm0",
+        "interface": "cmsis-dap",
+        "baseAddr": "0x08000000"
+      },
+      "uploadConfigMap": {
+        "JLink": {
+          "bin": "",
+          "baseAddr": "",
+          "cpuInfo": {
+            "vendor": "null",
+            "cpuName": "null"
+          },
+          "proType": 1,
+          "speed": 8000,
+          "otherCmds": ""
+        },
+        "OpenOCD": {
+          "bin": "build\\Debug\\VSCode_test.hex",
+          "target": "stm32f0x",
+          "interface": "cmsis-dap",
+          "baseAddr": "0x08000000"
+        },
+        "pyOCD": {
+          "bin": "",
+          "targetName": "cortex_m",
+          "baseAddr": "0x08000000",
+          "speed": "4M",
+          "config": ".eide/debug.pyocd.yaml",
+          "otherCmds": ""
+        }
+      },
+      "custom_dep": {
+        "name": "default",
+        "incList": [
+          ".",
+          "User",
+          "Driver"
+        ],
+        "libList": [],
+        "defineList": [
+          "DeviceFamily_MSPM0G350X",
+          "__MSPM0G3507__"
+        ]
+      },
+      "builderOptions": {
+        "GCC": {
+          "version": 5,
+          "beforeBuildTasks": [],
+          "afterBuildTasks": [],
+          "global": {
+            "$float-abi-type": "hard",
+            "output-debug-info": "enable",
+            "misc-control": "--specs=nosys.specs --specs=nano.specs"
+          },
+          "c/cpp-compiler": {
+            "language-c": "c11",
+            "language-cpp": "c++11",
+            "optimization": "level-debug",
+            "warnings": "all-warnings",
+            "one-elf-section-per-function": true,
+            "one-elf-section-per-data": true
+          },
+          "asm-compiler": {},
+          "linker": {
+            "$outputTaskExcludes": [
+              ".bin"
+            ],
+            "output-format": "elf",
+            "remove-unused-input-sections": true,
+            "LIB_FLAGS": "-lm",
+            "$toolName": "auto"
+          }
+        },
+        "AC6": {
+          "version": 3,
+          "beforeBuildTasks": [],
+          "afterBuildTasks": [],
+          "global": {
+            "use-microLIB": false,
+            "output-debug-info": "enable"
+          },
+          "c/cpp-compiler": {
+            "optimization": "level-0",
+            "language-c": "c99",
+            "language-cpp": "c++11",
+            "link-time-optimization": false
+          },
+          "asm-compiler": {
+            "$use": "asm-auto",
+            "misc-controls": ""
+          },
+          "linker": {
+            "$outputTaskExcludes": [
+              ".bin"
+            ],
+            "output-format": "elf",
+            "misc-controls": "--diag_suppress=L6329"
+          }
+        },
+        "AC5": {
+          "version": 4,
+          "beforeBuildTasks": [],
+          "afterBuildTasks": [],
+          "global": {
+            "use-microLIB": false,
+            "output-debug-info": "enable"
+          },
+          "c/cpp-compiler": {
+            "optimization": "level-0",
+            "one-elf-section-per-function": true,
+            "c99-mode": true,
+            "C_FLAGS": "--diag_suppress=1 --diag_suppress=1295",
+            "CXX_FLAGS": "--diag_suppress=1 --diag_suppress=1295"
+          },
+          "asm-compiler": {},
+          "linker": {
+            "$outputTaskExcludes": [
+              ".bin"
+            ],
+            "output-format": "elf"
+          }
+        }
+      }
+    }
+  },
+  "version": "3.6"
+}
