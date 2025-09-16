@@ -55,8 +55,7 @@ extern "C"
 
 #include <stdbool.h>
 #include <string.h>
-#include "NimaLTD.I-CUBE-SPIF_conf.h"
-#include "spi.h"
+#include "ti_msp_dl_config.h"
 
 /************************************************************************************************************
 **************    Public Definitions
@@ -123,8 +122,8 @@ typedef enum
 
 typedef struct
 {
-  SPI_HandleTypeDef      *HSpi;
-  GPIO_TypeDef           *Gpio;
+  SPI_Regs               *HSpi;
+  GPIO_Regs              *Gpio;
   SPIF_ManufactorTypeDef Manufactor;
   SPIF_SizeTypeDef       Size;
   uint8_t                Inited;
@@ -142,7 +141,7 @@ typedef struct
 **************    Public Functions
 ************************************************************************************************************/
 
-bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_HandleTypeDef *HSpi, GPIO_TypeDef *Gpio, uint16_t Pin);
+bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs *Gpio, uint16_t Pin);
 
 bool SPIF_EraseChip(SPIF_HandleTypeDef *Handle);
 bool SPIF_EraseSector(SPIF_HandleTypeDef *Handle, uint32_t Sector);

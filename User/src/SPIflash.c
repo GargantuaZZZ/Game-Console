@@ -3,24 +3,13 @@
 **************    Include Headers
 ************************************************************************************************************/
 
-#include "spif.h"
+#include "SPIflash.h"
 
 #if SPIF_DEBUG == SPIF_DEBUG_DISABLE
 #define dprintf(...)
 #else
 #include <stdio.h>
 #define dprintf(...) printf(__VA_ARGS__)
-#endif
-
-#if SPIF_RTOS == SPIF_RTOS_DISABLE
-#elif SPIF_RTOS == SPIF_RTOS_CMSIS_V1
-#include "cmsis_os.h"
-#include "freertos.h"
-#elif SPIF_RTOS == SPIF_RTOS_CMSIS_V2
-#include "cmsis_os2.h"
-#include "freertos.h"
-#elif SPIF_RTOS == SPIF_RTOS_THREADX
-#include "app_threadx.h"
 #endif
 
 /************************************************************************************************************
@@ -117,19 +106,7 @@ bool     SPIF_ReadFn(SPIF_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data
 
 void SPIF_Delay(uint32_t Delay)
 {
-#if SPIF_RTOS == SPIF_RTOS_DISABLE
-  HAL_Delay(Delay);
-#elif (SPIF_RTOS == SPIF_RTOS_CMSIS_V1) || (SPIF_RTOS == SPIF_RTOS_CMSIS_V2)
-  uint32_t d = (configTICK_RATE_HZ * Delay) / 1000;
-  if (d == 0)
-      d = 1;
-  osDelay(d);
-#elif SPIF_RTOS == SPIF_RTOS_THREADX
-  uint32_t d = (TX_TIMER_TICKS_PER_SECOND * Delay) / 1000;
-  if (d == 0)
-    d = 1;
-  tx_thread_sleep(d);
-#endif
+  DL_Common_delayCycles(Delay*32000);
 }
 
 /***********************************************************************************************************/
@@ -154,7 +131,10 @@ void SPIF_UnLock(SPIF_HandleTypeDef *Handle)
 
 void SPIF_CsPin(SPIF_HandleTypeDef *Handle, bool Select)
 {
-  HAL_GPIO_WritePin(Handle->Gpio, Handle->Pin, (GPIO_PinState)Select);
+  if (Select)
+    DL_GPIO_setPins(Handle->Gpio, Handle->Pin);
+  else
+    DL_GPIO_clearPins(Handle->Gpio, Handle->Pin);  
   for (int i = 0; i < 10; i++);
 }
 
@@ -163,40 +143,11 @@ void SPIF_CsPin(SPIF_HandleTypeDef *Handle, bool Select)
 bool SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
-#if (SPIF_PLATFORM == SPIF_PLATFORM_HAL)
-  if (HAL_SPI_TransmitReceive(Handle->HSpi, Tx, Rx, Size, Timeout) == HAL_OK)
-  {
-    retVal = true;
+  for (uint8_t i = 0; i < Size; i++){
+    DL_SPI_transmitDataBlocking8(Handle->HSpi, Tx[i]);
+    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->Hspi);
   }
-  else
-  {
-    dprintf("SPIF TIMEOUT\r\n");
-  }
-#elif (SPIF_PLATFORM == SPIF_PLATFORM_HAL_DMA)
-  uint32_t startTime = HAL_GetTick();
-  if (HAL_SPI_TransmitReceive_DMA(Handle->HSpi, Tx, Rx, Size) != HAL_OK)
-  {
-    dprintf("SPIF TRANSFER ERROR\r\n");
-  }
-  else
-  {
-    while (1)
-    {
-      SPIF_Delay(1);
-      if (HAL_GetTick() - startTime >= Timeout)
-      {
-        dprintf("SPIF TIMEOUT\r\n");
-        HAL_SPI_DMAStop(Handle->HSpi);
-        break;
-      }
-      if (HAL_SPI_GetState(Handle->HSpi) == HAL_SPI_STATE_READY)
-      {
-        retVal = true;
-        break;
-      }
-    }
-  }
-#endif
+  retVal = true;
   return retVal;
 }
 
@@ -205,40 +156,9 @@ bool SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, 
 bool SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
-#if (SPIF_PLATFORM == SPIF_PLATFORM_HAL)
-  if (HAL_SPI_Transmit(Handle->HSpi, Tx, Size, Timeout) == HAL_OK)
-  {
-    retVal = true;
-  }
-  else
-  {
-    dprintf("SPIF TIMEOUT\r\n");
-  }
-#elif (SPIF_PLATFORM == SPIF_PLATFORM_HAL_DMA)
-  uint32_t startTime = HAL_GetTick();
-  if (HAL_SPI_Transmit_DMA(Handle->HSpi, Tx, Size) != HAL_OK)
-  {
-    dprintf("SPIF TRANSFER ERROR\r\n");
-  }
-  else
-  {
-    while (1)
-    {
-      SPIF_Delay(1);
-      if (HAL_GetTick() - startTime >= Timeout)
-      {
-        dprintf("SPIF TIMEOUT\r\n");
-        HAL_SPI_DMAStop(Handle->HSpi);
-        break;
-      }
-      if (HAL_SPI_GetState(Handle->HSpi) == HAL_SPI_STATE_READY)
-      {
-        retVal = true;
-        break;
-      }
-    }
-  }
-#endif
+  for (uint8_t i = 0; i < Size; i++)
+    DL_SPI_transmitDataBlocking8(Handle->Hspi, Tx[i]);
+  retVal = true;
   return retVal;
 }
 
@@ -247,40 +167,10 @@ bool SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_
 bool SPIF_Receive(SPIF_HandleTypeDef *Handle, uint8_t *Rx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
-#if (SPIF_PLATFORM == SPIF_PLATFORM_HAL)
-  if (HAL_SPI_Receive(Handle->HSpi, Rx, Size, Timeout) == HAL_OK)
-  {
-    retVal = true;
+  for (uint8_t i = 0; i < Size; i++){
+    DL_SPI_transmitData8(Handle->Hspi, 0x00);
+    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->Hspi);
   }
-  else
-  {
-    dprintf("SPIF TIMEOUT\r\n");
-  }
-#elif (SPIF_PLATFORM == SPIF_PLATFORM_HAL_DMA)
-  uint32_t startTime = HAL_GetTick();
-  if (HAL_SPI_Receive_DMA(Handle->HSpi, Rx, Size) != HAL_OK)
-  {
-    dprintf("SPIF TRANSFER ERROR\r\n");
-  }
-  else
-  {
-    while (1)
-    {
-      SPIF_Delay(1);
-      if (HAL_GetTick() - startTime >= Timeout)
-      {
-        dprintf("SPIF TIMEOUT\r\n");
-        HAL_SPI_DMAStop(Handle->HSpi);
-        break;
-      }
-      if (HAL_SPI_GetState(Handle->HSpi) == HAL_SPI_STATE_READY)
-      {
-        retVal = true;
-        break;
-      }
-    }
-  }
-#endif
   return retVal;
 }
 
@@ -787,7 +677,7 @@ bool SPIF_ReadFn(SPIF_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, ui
   *
   * @retval bool: true or false
   */
-bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_HandleTypeDef *HSpi, GPIO_TypeDef *Gpio, uint16_t Pin)
+bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs  *Gpio, uint16_t Pin)
 {
   bool retVal = false;
   do
