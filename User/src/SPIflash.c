@@ -145,7 +145,7 @@ bool SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, 
   bool retVal = false;
   for (uint8_t i = 0; i < Size; i++){
     DL_SPI_transmitDataBlocking8(Handle->HSpi, Tx[i]);
-    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->Hspi);
+    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->HSpi);
   }
   retVal = true;
   return retVal;
@@ -157,7 +157,7 @@ bool SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_
 {
   bool retVal = false;
   for (uint8_t i = 0; i < Size; i++)
-    DL_SPI_transmitDataBlocking8(Handle->Hspi, Tx[i]);
+    DL_SPI_transmitDataBlocking8(Handle->HSpi, Tx[i]);
   retVal = true;
   return retVal;
 }
@@ -168,8 +168,8 @@ bool SPIF_Receive(SPIF_HandleTypeDef *Handle, uint8_t *Rx, size_t Size, uint32_t
 {
   bool retVal = false;
   for (uint8_t i = 0; i < Size; i++){
-    DL_SPI_transmitData8(Handle->Hspi, 0x00);
-    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->Hspi);
+    DL_SPI_transmitData8(Handle->HSpi, 0x00);
+    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->HSpi);
   }
   return retVal;
 }
