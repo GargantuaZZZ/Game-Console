@@ -56,6 +56,7 @@ extern "C"
 #include <stdbool.h>
 #include <string.h>
 #include "ti_msp_dl_config.h"
+#include "utilities.h"
 
 /************************************************************************************************************
 **************    Public Definitions

@@ -38,9 +38,10 @@
  *  by the SysConfig tool.
  */
 
-#include "inc/ti_msp_dl_config.h"
+#include "ti_msp_dl_config.h"
 
 DL_TimerA_backupConfig gTIMER_KEYsBackup;
+DL_TimerA_backupConfig gTIMER_LEDsBackup;
 DL_SPI_backupConfig gSPI_FlashBackup;
 
 /*
@@ -54,12 +55,14 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     /* Module-Specific Initializations*/
     SYSCFG_DL_SYSCTL_init();
     SYSCFG_DL_TIMER_KEYs_init();
+    SYSCFG_DL_TIMER_LEDs_init();
     SYSCFG_DL_UART_Debug_init();
     SYSCFG_DL_SPI_Flash_init();
     SYSCFG_DL_DMA_init();
     SYSCFG_DL_DAC12_init();
     /* Ensure backup structures have no valid state */
 	gTIMER_KEYsBackup.backupRdy 	= false;
+	gTIMER_LEDsBackup.backupRdy 	= false;
 
 	gSPI_FlashBackup.backupRdy 	= false;
 
@@ -73,6 +76,7 @@ SYSCONFIG_WEAK bool SYSCFG_DL_saveConfiguration(void)
     bool retStatus = true;
 
 	retStatus &= DL_TimerA_saveConfiguration(TIMER_KEYs_INST, &gTIMER_KEYsBackup);
+	retStatus &= DL_TimerA_saveConfiguration(TIMER_LEDs_INST, &gTIMER_LEDsBackup);
 	retStatus &= DL_SPI_saveConfiguration(SPI_Flash_INST, &gSPI_FlashBackup);
 
     return retStatus;
@@ -84,6 +88,7 @@ SYSCONFIG_WEAK bool SYSCFG_DL_restoreConfiguration(void)
     bool retStatus = true;
 
 	retStatus &= DL_TimerA_restoreConfiguration(TIMER_KEYs_INST, &gTIMER_KEYsBackup, false);
+	retStatus &= DL_TimerA_restoreConfiguration(TIMER_LEDs_INST, &gTIMER_LEDsBackup, false);
 	retStatus &= DL_SPI_restoreConfiguration(SPI_Flash_INST, &gSPI_FlashBackup);
 
     return retStatus;
@@ -94,6 +99,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_GPIO_reset(GPIOA);
     DL_GPIO_reset(GPIOB);
     DL_TimerA_reset(TIMER_KEYs_INST);
+    DL_TimerA_reset(TIMER_LEDs_INST);
     DL_UART_Main_reset(UART_Debug_INST);
     DL_SPI_reset(SPI_Flash_INST);
 
@@ -102,6 +108,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_GPIO_enablePower(GPIOA);
     DL_GPIO_enablePower(GPIOB);
     DL_TimerA_enablePower(TIMER_KEYs_INST);
+    DL_TimerA_enablePower(TIMER_LEDs_INST);
     DL_UART_Main_enablePower(UART_Debug_INST);
     DL_SPI_enablePower(SPI_Flash_INST);
 
@@ -158,26 +165,26 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 
     DL_GPIO_initDigitalOutput(COMs_SDA_Screen_IOMUX);
 
-    DL_GPIO_clearPins(GPIOA, LEDs_LED5_PIN |
-		LEDs_LED6_PIN |
-		LEDs_LED7_PIN |
-		COMs_SCL_Screen_PIN |
-		COMs_SDA_Screen_PIN);
-    DL_GPIO_enableOutput(GPIOA, LEDs_LED5_PIN |
-		LEDs_LED6_PIN |
-		LEDs_LED7_PIN |
-		COMs_SCL_Screen_PIN |
-		COMs_SDA_Screen_PIN);
+    DL_GPIO_clearPins(GPIOA, LEDs_LED2_PIN |
+		LEDs_LED3_PIN |
+		LEDs_LED4_PIN);
+    DL_GPIO_enableOutput(GPIOA, LEDs_LED2_PIN |
+		LEDs_LED3_PIN |
+		LEDs_LED4_PIN);
     DL_GPIO_clearPins(GPIOB, LEDs_LED1_PIN |
-		LEDs_LED2_PIN |
-		LEDs_LED3_PIN |
-		LEDs_LED4_PIN |
-		COMs_CS_Flash_PIN);
+		LEDs_LED5_PIN |
+		LEDs_LED6_PIN |
+		LEDs_LED7_PIN |
+		COMs_CS_Flash_PIN |
+		COMs_SCL_Screen_PIN |
+		COMs_SDA_Screen_PIN);
     DL_GPIO_enableOutput(GPIOB, LEDs_LED1_PIN |
-		LEDs_LED2_PIN |
-		LEDs_LED3_PIN |
-		LEDs_LED4_PIN |
-		COMs_CS_Flash_PIN);
+		LEDs_LED5_PIN |
+		LEDs_LED6_PIN |
+		LEDs_LED7_PIN |
+		COMs_CS_Flash_PIN |
+		COMs_SCL_Screen_PIN |
+		COMs_SDA_Screen_PIN);
 
 }
 
@@ -230,6 +237,42 @@ SYSCONFIG_WEAK void SYSCFG_DL_TIMER_KEYs_init(void) {
         (DL_TimerA_TimerConfig *) &gTIMER_KEYsTimerConfig);
     DL_TimerA_enableInterrupt(TIMER_KEYs_INST , DL_TIMERA_INTERRUPT_ZERO_EVENT);
     DL_TimerA_enableClock(TIMER_KEYs_INST);
+
+
+
+
+}
+
+/*
+ * Timer clock configuration to be sourced by LFCLK /  (32768 Hz)
+ * timerClkFreq = (timerClkSrc / (timerClkDivRatio * (timerClkPrescale + 1)))
+ *   32768 Hz = 32768 Hz / (1 * (0 + 1))
+ */
+static const DL_TimerA_ClockConfig gTIMER_LEDsClockConfig = {
+    .clockSel    = DL_TIMER_CLOCK_LFCLK,
+    .divideRatio = DL_TIMER_CLOCK_DIVIDE_1,
+    .prescale    = 0U,
+};
+
+/*
+ * Timer load value (where the counter starts from) is calculated as (timerPeriod * timerClockFreq) - 1
+ * TIMER_LEDs_INST_LOAD_VALUE = (2s * 32768 Hz) - 1
+ */
+static const DL_TimerA_TimerConfig gTIMER_LEDsTimerConfig = {
+    .period     = TIMER_LEDs_INST_LOAD_VALUE,
+    .timerMode  = DL_TIMER_TIMER_MODE_PERIODIC,
+    .startTimer = DL_TIMER_STOP,
+};
+
+SYSCONFIG_WEAK void SYSCFG_DL_TIMER_LEDs_init(void) {
+
+    DL_TimerA_setClockConfig(TIMER_LEDs_INST,
+        (DL_TimerA_ClockConfig *) &gTIMER_LEDsClockConfig);
+
+    DL_TimerA_initTimerMode(TIMER_LEDs_INST,
+        (DL_TimerA_TimerConfig *) &gTIMER_LEDsTimerConfig);
+    DL_TimerA_enableInterrupt(TIMER_LEDs_INST , DL_TIMERA_INTERRUPT_ZERO_EVENT);
+    DL_TimerA_enableClock(TIMER_LEDs_INST);
 
 
 

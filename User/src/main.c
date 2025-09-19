@@ -3,7 +3,7 @@
 #include "inc/OLED.h"
 #include "inc/Alerts.h"
 
-#define SPIF_DEBUG SPIF_DEBUG_DISABLE
+#define SPIF_DEBUG SPIF_DEBUG_FULL
 
 #define KEY_PRESSED     false
 #define KEY_RELEASED    true
@@ -14,9 +14,10 @@
 #define IDLE_BUF2       2
 #define FILL_BUF2       3
 
-#define READ_KEY(n)     DL_GPIO_readPins(KEYs_KEY##n##_PORT, KEYs_KEY##n##_PIN)
-#define SET_LED(n)      DL_GPIO_setPins(LEDs_LED##n##_PORT, LEDs_LED##n##_PIN)
-#define CLEAR_LED(n)    DL_GPIO_clearPins(LEDs_LED##n##_PORT, LEDs_LED##n##_PIN)
+const GPIO_Regs* LEDs_PORT[7] = {LEDs_LED1_PORT, LEDs_LED2_PORT, LEDs_LED3_PORT, LEDs_LED4_PORT, LEDs_LED5_PORT, LEDs_LED6_PORT, LEDs_LED7_PORT};
+const uint32_t LEDs_PIN[7] = {LEDs_LED1_PIN, LEDs_LED2_PIN, LEDs_LED3_PIN, LEDs_LED4_PIN, LEDs_LED5_PIN, LEDs_LED6_PIN, LEDs_LED7_PIN};
+const GPIO_Regs* KEYs_PORT[7] = {KEYs_KEY1_PORT, KEYs_KEY2_PORT, KEYs_KEY3_PORT, KEYs_KEY4_PORT, KEYs_KEY5_PORT, KEYs_KEY6_PORT, KEYs_KEY7_PORT};
+const uint32_t KEYs_PIN[7] = {KEYs_KEY1_PIN, KEYs_KEY2_PIN, KEYs_KEY3_PIN, KEYs_KEY4_PIN, KEYs_KEY5_PIN, KEYs_KEY6_PIN, KEYs_KEY7_PIN};
 
 bool        key_state[7],is_key_triggered[7];
 uint8_t     key_stable_cnt[7];
@@ -68,7 +69,7 @@ void TIMER_KEYs_INST_IRQHandler(){
         case TIMER_KEYs_INST_LOAD_VALUE:
             bool current_state;
             for (uint8_t i = 0; i < 7; i++){
-                current_state = READ_KEY(i);
+                current_state = DL_GPIO_readPins(KEYs_PORT[i], KEYs_PIN[i]);
                 if (current_state == key_state[i])
                     key_stable_cnt[i] = 0;
                 else{
