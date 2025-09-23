@@ -78,15 +78,20 @@ extern "C" {
 
 
 /* Defines for TIMER_KEYs */
-#define TIMER_KEYs_INST                                                  (TIMA1)
-#define TIMER_KEYs_INST_IRQHandler                              TIMA1_IRQHandler
-#define TIMER_KEYs_INST_INT_IRQN                                (TIMA1_INT_IRQn)
+#define TIMER_KEYs_INST                                                  (TIMG0)
+#define TIMER_KEYs_INST_IRQHandler                              TIMG0_IRQHandler
+#define TIMER_KEYs_INST_INT_IRQN                                (TIMG0_INT_IRQn)
 #define TIMER_KEYs_INST_LOAD_VALUE                                         (32U)
 /* Defines for TIMER_LEDs */
-#define TIMER_LEDs_INST                                                  (TIMA0)
-#define TIMER_LEDs_INST_IRQHandler                              TIMA0_IRQHandler
-#define TIMER_LEDs_INST_INT_IRQN                                (TIMA0_INT_IRQn)
+#define TIMER_LEDs_INST                                                  (TIMA1)
+#define TIMER_LEDs_INST_IRQHandler                              TIMA1_IRQHandler
+#define TIMER_LEDs_INST_INT_IRQN                                (TIMA1_INT_IRQn)
 #define TIMER_LEDs_INST_LOAD_VALUE                                      (65535U)
+/* Defines for TIMER_PROG */
+#define TIMER_PROG_INST                                                  (TIMA0)
+#define TIMER_PROG_INST_IRQHandler                              TIMA0_IRQHandler
+#define TIMER_PROG_INST_INT_IRQN                                (TIMA0_INT_IRQn)
+#define TIMER_PROG_INST_LOAD_VALUE                                       (8191U)
 
 
 
@@ -222,6 +227,7 @@ void SYSCFG_DL_GPIO_init(void);
 void SYSCFG_DL_SYSCTL_init(void);
 void SYSCFG_DL_TIMER_KEYs_init(void);
 void SYSCFG_DL_TIMER_LEDs_init(void);
+void SYSCFG_DL_TIMER_PROG_init(void);
 void SYSCFG_DL_UART_Debug_init(void);
 void SYSCFG_DL_SPI_Flash_init(void);
 void SYSCFG_DL_DMA_init(void);

@@ -38,10 +38,10 @@
  *  by the SysConfig tool.
  */
 
-#include "ti_msp_dl_config.h"
+#include "inc/ti_msp_dl_config.h"
 
-DL_TimerA_backupConfig gTIMER_KEYsBackup;
 DL_TimerA_backupConfig gTIMER_LEDsBackup;
+DL_TimerA_backupConfig gTIMER_PROGBackup;
 DL_SPI_backupConfig gSPI_FlashBackup;
 
 /*
@@ -56,13 +56,14 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_SYSCTL_init();
     SYSCFG_DL_TIMER_KEYs_init();
     SYSCFG_DL_TIMER_LEDs_init();
+    SYSCFG_DL_TIMER_PROG_init();
     SYSCFG_DL_UART_Debug_init();
     SYSCFG_DL_SPI_Flash_init();
     SYSCFG_DL_DMA_init();
     SYSCFG_DL_DAC12_init();
     /* Ensure backup structures have no valid state */
-	gTIMER_KEYsBackup.backupRdy 	= false;
 	gTIMER_LEDsBackup.backupRdy 	= false;
+	gTIMER_PROGBackup.backupRdy 	= false;
 
 	gSPI_FlashBackup.backupRdy 	= false;
 
@@ -75,8 +76,8 @@ SYSCONFIG_WEAK bool SYSCFG_DL_saveConfiguration(void)
 {
     bool retStatus = true;
 
-	retStatus &= DL_TimerA_saveConfiguration(TIMER_KEYs_INST, &gTIMER_KEYsBackup);
 	retStatus &= DL_TimerA_saveConfiguration(TIMER_LEDs_INST, &gTIMER_LEDsBackup);
+	retStatus &= DL_TimerA_saveConfiguration(TIMER_PROG_INST, &gTIMER_PROGBackup);
 	retStatus &= DL_SPI_saveConfiguration(SPI_Flash_INST, &gSPI_FlashBackup);
 
     return retStatus;
@@ -87,8 +88,8 @@ SYSCONFIG_WEAK bool SYSCFG_DL_restoreConfiguration(void)
 {
     bool retStatus = true;
 
-	retStatus &= DL_TimerA_restoreConfiguration(TIMER_KEYs_INST, &gTIMER_KEYsBackup, false);
 	retStatus &= DL_TimerA_restoreConfiguration(TIMER_LEDs_INST, &gTIMER_LEDsBackup, false);
+	retStatus &= DL_TimerA_restoreConfiguration(TIMER_PROG_INST, &gTIMER_PROGBackup, false);
 	retStatus &= DL_SPI_restoreConfiguration(SPI_Flash_INST, &gSPI_FlashBackup);
 
     return retStatus;
@@ -98,8 +99,9 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
 {
     DL_GPIO_reset(GPIOA);
     DL_GPIO_reset(GPIOB);
-    DL_TimerA_reset(TIMER_KEYs_INST);
+    DL_TimerG_reset(TIMER_KEYs_INST);
     DL_TimerA_reset(TIMER_LEDs_INST);
+    DL_TimerA_reset(TIMER_PROG_INST);
     DL_UART_Main_reset(UART_Debug_INST);
     DL_SPI_reset(SPI_Flash_INST);
 
@@ -107,8 +109,9 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
 
     DL_GPIO_enablePower(GPIOA);
     DL_GPIO_enablePower(GPIOB);
-    DL_TimerA_enablePower(TIMER_KEYs_INST);
+    DL_TimerG_enablePower(TIMER_KEYs_INST);
     DL_TimerA_enablePower(TIMER_LEDs_INST);
+    DL_TimerA_enablePower(TIMER_PROG_INST);
     DL_UART_Main_enablePower(UART_Debug_INST);
     DL_SPI_enablePower(SPI_Flash_INST);
 
@@ -212,7 +215,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_SYSCTL_init(void)
  * timerClkFreq = (timerClkSrc / (timerClkDivRatio * (timerClkPrescale + 1)))
  *   32768 Hz = 32768 Hz / (1 * (0 + 1))
  */
-static const DL_TimerA_ClockConfig gTIMER_KEYsClockConfig = {
+static const DL_TimerG_ClockConfig gTIMER_KEYsClockConfig = {
     .clockSel    = DL_TIMER_CLOCK_LFCLK,
     .divideRatio = DL_TIMER_CLOCK_DIVIDE_1,
     .prescale    = 0U,
@@ -222,7 +225,7 @@ static const DL_TimerA_ClockConfig gTIMER_KEYsClockConfig = {
  * Timer load value (where the counter starts from) is calculated as (timerPeriod * timerClockFreq) - 1
  * TIMER_KEYs_INST_LOAD_VALUE = (1ms * 32768 Hz) - 1
  */
-static const DL_TimerA_TimerConfig gTIMER_KEYsTimerConfig = {
+static const DL_TimerG_TimerConfig gTIMER_KEYsTimerConfig = {
     .period     = TIMER_KEYs_INST_LOAD_VALUE,
     .timerMode  = DL_TIMER_TIMER_MODE_PERIODIC,
     .startTimer = DL_TIMER_STOP,
@@ -230,13 +233,13 @@ static const DL_TimerA_TimerConfig gTIMER_KEYsTimerConfig = {
 
 SYSCONFIG_WEAK void SYSCFG_DL_TIMER_KEYs_init(void) {
 
-    DL_TimerA_setClockConfig(TIMER_KEYs_INST,
-        (DL_TimerA_ClockConfig *) &gTIMER_KEYsClockConfig);
+    DL_TimerG_setClockConfig(TIMER_KEYs_INST,
+        (DL_TimerG_ClockConfig *) &gTIMER_KEYsClockConfig);
 
-    DL_TimerA_initTimerMode(TIMER_KEYs_INST,
-        (DL_TimerA_TimerConfig *) &gTIMER_KEYsTimerConfig);
-    DL_TimerA_enableInterrupt(TIMER_KEYs_INST , DL_TIMERA_INTERRUPT_ZERO_EVENT);
-    DL_TimerA_enableClock(TIMER_KEYs_INST);
+    DL_TimerG_initTimerMode(TIMER_KEYs_INST,
+        (DL_TimerG_TimerConfig *) &gTIMER_KEYsTimerConfig);
+    DL_TimerG_enableInterrupt(TIMER_KEYs_INST , DL_TIMERG_INTERRUPT_ZERO_EVENT);
+    DL_TimerG_enableClock(TIMER_KEYs_INST);
 
 
 
@@ -273,6 +276,42 @@ SYSCONFIG_WEAK void SYSCFG_DL_TIMER_LEDs_init(void) {
         (DL_TimerA_TimerConfig *) &gTIMER_LEDsTimerConfig);
     DL_TimerA_enableInterrupt(TIMER_LEDs_INST , DL_TIMERA_INTERRUPT_ZERO_EVENT);
     DL_TimerA_enableClock(TIMER_LEDs_INST);
+
+
+
+
+}
+
+/*
+ * Timer clock configuration to be sourced by LFCLK /  (32768 Hz)
+ * timerClkFreq = (timerClkSrc / (timerClkDivRatio * (timerClkPrescale + 1)))
+ *   32768 Hz = 32768 Hz / (1 * (0 + 1))
+ */
+static const DL_TimerA_ClockConfig gTIMER_PROGClockConfig = {
+    .clockSel    = DL_TIMER_CLOCK_LFCLK,
+    .divideRatio = DL_TIMER_CLOCK_DIVIDE_1,
+    .prescale    = 0U,
+};
+
+/*
+ * Timer load value (where the counter starts from) is calculated as (timerPeriod * timerClockFreq) - 1
+ * TIMER_PROG_INST_LOAD_VALUE = (250ms * 32768 Hz) - 1
+ */
+static const DL_TimerA_TimerConfig gTIMER_PROGTimerConfig = {
+    .period     = TIMER_PROG_INST_LOAD_VALUE,
+    .timerMode  = DL_TIMER_TIMER_MODE_PERIODIC,
+    .startTimer = DL_TIMER_STOP,
+};
+
+SYSCONFIG_WEAK void SYSCFG_DL_TIMER_PROG_init(void) {
+
+    DL_TimerA_setClockConfig(TIMER_PROG_INST,
+        (DL_TimerA_ClockConfig *) &gTIMER_PROGClockConfig);
+
+    DL_TimerA_initTimerMode(TIMER_PROG_INST,
+        (DL_TimerA_TimerConfig *) &gTIMER_PROGTimerConfig);
+    DL_TimerA_enableInterrupt(TIMER_PROG_INST , DL_TIMERA_INTERRUPT_ZERO_EVENT);
+    DL_TimerA_enableClock(TIMER_PROG_INST);
 
 
 

@@ -19,6 +19,7 @@ const SYSCTL = scripting.addModule("/ti/driverlib/SYSCTL");
 const TIMER  = scripting.addModule("/ti/driverlib/TIMER", {}, false);
 const TIMER1 = TIMER.addInstance();
 const TIMER2 = TIMER.addInstance();
+const TIMER3 = TIMER.addInstance();
 const UART   = scripting.addModule("/ti/driverlib/UART", {}, false);
 const UART1  = UART.addInstance();
 
@@ -129,6 +130,12 @@ TIMER2.interrupts  = ["ZERO"];
 TIMER2.timerMode   = "PERIODIC";
 TIMER2.timerPeriod = "2s";
 
+TIMER3.$name       = "TIMER_PROG";
+TIMER3.timerClkSrc = "LFCLK";
+TIMER3.timerMode   = "PERIODIC";
+TIMER3.timerPeriod = "250ms";
+TIMER3.interrupts  = ["ZERO"];
+
 UART1.$name                            = "UART_Debug";
 UART1.targetBaudRate                   = 115200;
 UART1.peripheral.$assign               = "UART0";
@@ -153,5 +160,6 @@ DAC12.DMA_CHANNEL.peripheral.$suggestSolution = "DMA_CH0";
 Board.peripheral.$suggestSolution             = "DEBUGSS";
 Board.peripheral.swclkPin.$suggestSolution    = "PA20";
 Board.peripheral.swdioPin.$suggestSolution    = "PA19";
-TIMER1.peripheral.$suggestSolution            = "TIMA1";
-TIMER2.peripheral.$suggestSolution            = "TIMA0";
+TIMER1.peripheral.$suggestSolution            = "TIMG0";
+TIMER2.peripheral.$suggestSolution            = "TIMA1";
+TIMER3.peripheral.$suggestSolution            = "TIMA0";
