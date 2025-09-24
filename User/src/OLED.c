@@ -256,6 +256,20 @@ void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 }
 
 /**
+  * @brief  OLED显示封面图像
+  * @param  无
+  * @retval 无
+*/
+void OLED_ShowCoverIMG(void){
+	OLED_SetCursor(0, 0);
+	for (uint8_t row = 0; row < 4; row++)
+		for (uint8_t col = 0; col < 128){
+			OLED_WriteData(COVER_IMG[row][col]);
+			DL_Common_delayCycles(64000);
+		}
+}
+
+/**
   * @brief  OLED初始化
   * @param  无
   * @retval 无

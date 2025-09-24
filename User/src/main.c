@@ -195,6 +195,7 @@ int main(void) {
     DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
     DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
     DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+    OLED_ShowCoverIMG();
 
     while (1) {
         switch (game_state){
