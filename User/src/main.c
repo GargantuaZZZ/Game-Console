@@ -93,12 +93,14 @@ void FillBuffer(){
                 else
                     target2 = 8;
                 score += 3;
+                OLED_ShowNum(3, 10, score, 3);
             }
             if (i != target1 && i != target2 && is_key_triggered[i]){
                 play_prog2 = 1;
                 key_result = MISS;
                 is_key_triggered[i] = false;
                 score -= 1;
+                OLED_ShowNum(3, 10, score, 3);
             }
         }
         if (play_prog2){
@@ -133,12 +135,14 @@ void FillBuffer(){
                 else
                     target2 = 8;
                 score += 3;
+                OLED_ShowNum(3, 10, score, 3);
             }
             if (i != target1 && i != target2 && is_key_triggered[i]){
                 play_prog2 = 1;
                 key_result = MISS;
                 is_key_triggered[i] = false;
                 score -= 1;
+                OLED_ShowNum(3, 10, score, 3);
             }
         }
         if (play_prog2){
@@ -204,6 +208,11 @@ int main(void) {
                 while (play_prog1 < WELCOME_ADDR + WELCOME_LEN)
                     FillBuffer();
                 DL_Timer_startCounter(TIMER_KEYs_INST);
+                OLED_Clear();
+                OLED_ShowChinese(2, 2, 0);
+                OLED_ShowChinese(2, 4, 1);
+                for (uint8_t i = 0; i < 7; i++)
+                    OLED_ShowChinese(4, i + 2, i + 4);
                 game_state = DIFF_SEL;
             break;
 
@@ -220,6 +229,7 @@ int main(void) {
                         FillBuffer();
                     DL_Timer_setLoadValue(TIMER_LEDs_INST, SPEED[difficulty]);
                     level = 0;
+                    score = 0;
                     diff_sel_state = IDLE;
                     game_state = LEVEL_SEL;
                 }
@@ -230,6 +240,7 @@ int main(void) {
                                 play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
                                 difficulty = i;
                                 DL_Timer_stopCounter(TIMER_KEYs_INST);
+                                OLED_ShowNum(1, 10, i + 1, 1);
                                 diff_sel_state = BUSY;
                             }
                             else if (diff_sel_state == SELECTED){
@@ -242,6 +253,7 @@ int main(void) {
                                     play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
                                     difficulty = i;
                                     DL_Timer_stopCounter(TIMER_KEYs_INST);
+                                    OLED_ShowNum(1, 10, i + 1, 1);
                                     diff_sel_state = BUSY;
                                 }
                             }
@@ -253,6 +265,20 @@ int main(void) {
             //关卡选择
             case LEVEL_SEL:
                 play_prog1 = LEVEL_ADDR0 + level * LEVEL_LEN;
+                OLED_Clear();
+                OLED_ShowChinese(1, 3, 2);
+                OLED_ShowNum(1, 7, level + 1, 1);
+                OLED_ShowChinese(1, 5, 3);
+
+                OLED_ShowChinese(2, 2, 11);
+                OLED_ShowChinese(2, 3, 12);
+                OLED_ShowChar(2, 8, ':');
+                OLED_ShowNum(2, 10, TARGET_SCORE[difficulty][level], 3);
+
+                OLED_ShowChinese(3, 2, 13);
+                OLED_ShowChinese(3, 3, 14);
+                OLED_ShowChar(3, 8, ':');
+                OLED_ShowNum(3, 10, score, 3);
                 game_state = LEVEL_SEL_BUSY;
             break;
 
@@ -266,6 +292,7 @@ int main(void) {
                 srand((unsigned)time(NULL));
                 DL_Timer_startCounter(TIMER_LEDs_INST);
                 DL_Timer_startCounter(TIMER_PROG_INST);
+                OLED_SetCursor(7, 0);
             break;
 
             //开始游戏
@@ -288,6 +315,7 @@ int main(void) {
 
             //游戏结束
             case GAME_OVER:
+                OLED_Clear();
                 if (score >= TARGET_SCORE[difficulty][level]){
                     if (level < 2){
                         play_prog1 = WIN_ADDR;
@@ -382,6 +410,7 @@ void TIMER_PROG_INST_IRQHandler(){
     switch (TIMER_PROG_INST_INT_IRQN){
         case DL_TIMER_IIDX_ZERO:
             game_prog++;
+            OLED_WriteData(0xFF);
         break;
         default:break;
     }

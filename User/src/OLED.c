@@ -256,6 +256,27 @@ void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 }
 
 /**
+  * @brief  OLED显示中文
+  * @param  Line 起始行位置，范围：1～4
+  * @param  Column 起始列位置，范围：1～8
+  * @param  ID 文字在字库中的序号
+  * @retval 无
+*/
+void OLED_ShowChinese(uint8_t line, uint8_t Column, uint8_t ID){
+	uint8_t i;
+	OLED_SetCursor((Line - 1) * 2, (Column - 1) * 16);		//设置光标位置在上半部分
+	for (i = 0; i < 16; i++)
+	{
+		OLED_WriteData(CHINESE[ID][i]);						//显示上半部分内容
+	}
+	OLED_SetCursor((Line - 1) * 2 + 1, (Column - 1) * 16);	//设置光标位置在下半部分
+	for (i = 0; i < 16; i++)
+	{
+		OLED_WriteData(CHINESE[ID][i + 16]);				//显示下半部分内容
+	}
+}
+
+/**
   * @brief  OLED显示封面图像
   * @param  无
   * @retval 无
