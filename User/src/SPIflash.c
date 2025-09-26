@@ -3,7 +3,7 @@
 **************    Include Headers
 ************************************************************************************************************/
 
-#include "SPIflash.h"
+#include "inc/SPIflash.h"
 
 #if SPIF_DEBUG == SPIF_DEBUG_DISABLE
 #define dprintf(...)
@@ -349,15 +349,15 @@ bool SPIF_WriteReg3(SPIF_HandleTypeDef *Handle, uint8_t Data)
 bool SPIF_WaitForWriting(SPIF_HandleTypeDef *Handle, uint32_t Timeout)
 {
   bool retVal = false;
-  uint32_t startTime = HAL_GetTick();
+  //uint32_t startTime = HAL_GetTick();
   while (1)
   {
     SPIF_Delay(1);
-    if (HAL_GetTick() - startTime >= Timeout)
-    {
-      dprintf("SPIF_WaitForWriting() TIMEOUT\r\n");
-      break;
-    }
+    // if (HAL_GetTick() - startTime >= Timeout)
+    // {
+    //   dprintf("SPIF_WaitForWriting() TIMEOUT\r\n");
+    //   break;
+    // }
     if ((SPIF_ReadReg1(Handle) & SPIF_STATUS1_BUSY) == 0)
     {
       retVal = true;
@@ -693,10 +693,11 @@ bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs  *Gpio, uin
     Handle->Pin = Pin;
     SPIF_CsPin(Handle, 1);
     /* wait for stable VCC */
-    while (HAL_GetTick() < 20)
-    {
-      SPIF_Delay(1);
-    }
+    // while (HAL_GetTick() < 20)
+    // {
+    //   SPIF_Delay(1);
+    // }
+    delay_cycles(20);
     if (SPIF_WriteDisable(Handle) == false)
     {
       break;

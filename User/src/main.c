@@ -73,6 +73,15 @@ uint16_t    play_prog1,play_prog2,score;
 
 SPIF_HandleTypeDef *Handle;
 
+void StartDMA(){
+    SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer1, 1024, 0);
+    SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer2, 1024, 0);
+    DL_DMA_setSrcAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&buffer1[0]);
+    DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
+    DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
+    DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+}
+
 
 
 void FillBuffer(){
@@ -81,7 +90,7 @@ void FillBuffer(){
         DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
         DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
         DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
-        SPIF_ReadPage(Handle, play_prog1++, buffer1, 1024, 0);
+        SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer1, 1024, 0);
         for (uint8_t i = 0; i < 7; i++){
             if ((i == target1 || i == target2) && is_key_triggered[i]){
                 play_prog2 = 1;
@@ -123,7 +132,7 @@ void FillBuffer(){
         DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
         DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
         DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
-        SPIF_ReadPage(Handle, play_prog1++, buffer2, 1024, 0);
+        SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer2, 1024, 0);
         for (uint8_t i = 0; i < 7; i++){
             if ((i == target1 || i == target2) && is_key_triggered[i]){
                 play_prog2 = 1;
@@ -193,12 +202,7 @@ int main(void) {
     game_prog = 0;
     play_prog1 = WELCOME_ADDR;
     play_prog2 = 0;
-    SPIF_ReadPage(Handle, play_prog1++, buffer1, 1024, 0);
-    SPIF_ReadPage(Handle, play_prog1++, buffer2, 1024, 0);
-    DL_DMA_setSrcAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&buffer1[0]);
-    DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
-    DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
-    DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+    StartDMA();
     OLED_ShowCoverIMG();
 
     while (1) {
@@ -207,6 +211,7 @@ int main(void) {
             case WELCOME:
                 while (play_prog1 < WELCOME_ADDR + WELCOME_LEN)
                     FillBuffer();
+                DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                 DL_Timer_startCounter(TIMER_KEYs_INST);
                 OLED_Clear();
                 OLED_ShowChinese(2, 2, 0);
@@ -221,12 +226,14 @@ int main(void) {
                 if (diff_sel_state == BUSY){
                     while (play_prog1 < DIFF_ADDR0 + (difficulty + 1) * DIFF_LEN)
                         FillBuffer();
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                     DL_Timer_startCounter(TIMER_KEYs_INST);
                     diff_sel_state = SELECTED;
                 }
                 else if (diff_sel_state = CONFIRMED){
                     while (play_prog1 < START_ADDR + START_LEN)
                         FillBuffer();
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                     DL_Timer_setLoadValue(TIMER_LEDs_INST, SPEED[difficulty]);
                     level = 0;
                     score = 0;
@@ -242,12 +249,14 @@ int main(void) {
                                 DL_Timer_stopCounter(TIMER_KEYs_INST);
                                 OLED_ShowNum(1, 10, i + 1, 1);
                                 diff_sel_state = BUSY;
+                                StartDMA();
                             }
                             else if (diff_sel_state == SELECTED){
                                 if (i == difficulty){
                                     play_prog1 = START_ADDR;
                                     DL_Timer_stopCounter(TIMER_KEYs_INST);
                                     diff_sel_state = CONFIRMED;
+                                    StartDMA();
                                 }
                                 else{
                                     play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
@@ -255,6 +264,7 @@ int main(void) {
                                     DL_Timer_stopCounter(TIMER_KEYs_INST);
                                     OLED_ShowNum(1, 10, i + 1, 1);
                                     diff_sel_state = BUSY;
+                                    StartDMA();
                                 }
                             }
                         }
@@ -280,12 +290,14 @@ int main(void) {
                 OLED_ShowChar(3, 8, ':');
                 OLED_ShowNum(3, 10, score, 3);
                 game_state = LEVEL_SEL_BUSY;
+                StartDMA();
             break;
 
             //开始音乐播放
             case LEVEL_SEL_BUSY:
                 while (play_prog1 < LEVEL_ADDR0 + (level + 1) * LEVEL_LEN)
                     FillBuffer();
+                DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                 DL_Timer_startCounter(TIMER_KEYs_INST);
                 game_state = PLAYING;
                 play_prog1 = BGM_ADDR;
@@ -293,6 +305,7 @@ int main(void) {
                 DL_Timer_startCounter(TIMER_LEDs_INST);
                 DL_Timer_startCounter(TIMER_PROG_INST);
                 OLED_SetCursor(7, 0);
+                StartDMA();
             break;
 
             //开始游戏
@@ -310,6 +323,8 @@ int main(void) {
                     target1 = 8;
                     target2 = 8;
                     game_state = GAME_OVER;
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                    StartDMA();
                 }
             break;
 
@@ -321,6 +336,7 @@ int main(void) {
                         play_prog1 = WIN_ADDR;
                         while (play_prog1 < WIN_ADDR + WIN_LEN)
                             FillBuffer();
+                        DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                         level++;
                         game_state = LEVEL_SEL;
                     }
@@ -328,6 +344,7 @@ int main(void) {
                         play_prog1 = WIN_ALL_ADDR;
                         while (play_prog1 < WIN_ALL_ADDR + WIN_ALL_LEN)
                             FillBuffer();
+                        DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                         game_state = DIFF_SEL;
                     }
                 }
@@ -335,6 +352,7 @@ int main(void) {
                     play_prog1 = LOSE_ADDR;
                     while (play_prog1 < LOSE_ADDR + LOSE_LEN)
                         FillBuffer();
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
                     game_state = DIFF_SEL;
                 }
             break;
@@ -347,9 +365,9 @@ void DAC12_IRQHandler(){
     switch (DAC12_INT_IRQN){
         case DL_DAC12_IIDX_DMA_DONE:
             if (buffer_state == IDLE_BUF1)
-                buffer_state == FILL_BUF2;
+                buffer_state = FILL_BUF2;
             else if (buffer_state == IDLE_BUF2)
-                buffer_state == FILL_BUF1;
+                buffer_state = FILL_BUF1;
         break;
         default:break;
     }

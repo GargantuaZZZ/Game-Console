@@ -1,12 +1,12 @@
 #include "inc/OLED.h"
-#include "OLED_Font.h"
+#include "inc/OLED_Font.h"
 
 /*引脚配置*/
-#define OLED_W_SCL_H		DL_GPIO_setPins(COMs_SCL_Screen_PORT,COMs_SCL_Screen_PIN)
-#define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_SCL_Screen_PORT,COMs_SCL_Screen_PIN)
-#define OLED_W_SDA_H		DL_GPIO_setPins(COMs_SDA_Screen_PORT,COMs_SDA_Screen_PIN)
-#define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_SDA_Screen_PORT,COMs_SDA_Screen_PIN)
-
+#define OLED_W_SCL_H		DL_GPIO_setPins(COMs_PORT, COMs_SCL_Screen_PIN)
+#define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_PORT, COMs_SCL_Screen_PIN)
+#define OLED_W_SDA_H		DL_GPIO_setPins(COMs_PORT, COMs_SDA_Screen_PIN)
+#define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_PORT, COMs_SDA_Screen_PIN)
+;
 /*引脚初始化*/
 void OLED_I2C_Init(void)
 {	
@@ -49,7 +49,10 @@ void OLED_I2C_SendByte(uint8_t Byte)
 	uint8_t i;
 	for (i = 0; i < 8; i++)
 	{
-		OLED_W_SDA(Byte & (0x80 >> i));
+		if (Byte & (0x80 >> i))
+			OLED_W_SDA_H;
+		else
+			OLED_W_SDA_L;
 		OLED_W_SCL_H;
 		OLED_W_SCL_L;
 	}
@@ -262,7 +265,7 @@ void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
   * @param  ID 文字在字库中的序号
   * @retval 无
 */
-void OLED_ShowChinese(uint8_t line, uint8_t Column, uint8_t ID){
+void OLED_ShowChinese(uint8_t Line, uint8_t Column, uint8_t ID){
 	uint8_t i;
 	OLED_SetCursor((Line - 1) * 2, (Column - 1) * 16);		//设置光标位置在上半部分
 	for (i = 0; i < 16; i++)
@@ -284,7 +287,7 @@ void OLED_ShowChinese(uint8_t line, uint8_t Column, uint8_t ID){
 void OLED_ShowCoverIMG(void){
 	OLED_SetCursor(0, 0);
 	for (uint8_t row = 0; row < 4; row++)
-		for (uint8_t col = 0; col < 128){
+		for (uint8_t col = 0; col < 128; col++){
 			OLED_WriteData(COVER_IMG[row][col]);
 			DL_Common_delayCycles(64000);
 		}
