@@ -124,7 +124,7 @@ void FillBuffer(){
             }
         }
         if (play_prog2){
-            for (uint8_t i = 0; i < 512; i++){
+            for (uint16_t i = 0; i < 512; i++){
                 if (key_result == HIT)
                     buffer1[i] = alert_hit[play_prog2++];
                 else
@@ -167,7 +167,7 @@ void FillBuffer(){
             }
         }
         if (play_prog2){
-            for (uint8_t i = 0; i < 512; i++){
+            for (uint16_t i = 0; i < 512; i++){
                 if (key_result == HIT)
                     buffer2[i] = alert_hit[play_prog2++];
                 else
@@ -183,9 +183,21 @@ void FillBuffer(){
     }
 }
 
-
-
 int main(void) {
+    SYSCFG_DL_init();
+    __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
+    __NVIC_EnableIRQ(DAC12_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_KEYs_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_KEYs_INST_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_LEDs_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_LEDs_INST_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_PROG_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_PROG_INST_INT_IRQN);
+    DL_Timer_startCounter(TIMER_LEDs_INST);
+    return 0;
+}
+
+int main1(void) {
     SYSCFG_DL_init();
     __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
     __NVIC_EnableIRQ(DAC12_INT_IRQN);
@@ -389,6 +401,7 @@ void DAC12_IRQHandler(){
 void TIMER_KEYs_INST_IRQHandler(){
     switch (TIMER_KEYs_INST_INT_IRQN){
         case DL_TIMER_IIDX_ZERO:
+        {
             bool current_state;
             for (uint8_t i = 0; i < 7; i++){
                 current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
@@ -404,6 +417,7 @@ void TIMER_KEYs_INST_IRQHandler(){
                     }
                 }
             }
+        }
 
         break;
         default:break;
