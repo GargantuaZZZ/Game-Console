@@ -10,6 +10,7 @@
 #define KEY_PRESSED     false
 #define KEY_RELEASED    true
 #define STABLE_CNT      20
+#define AUDIO_CHUNK_BYTES 1024U
 
 #define WELCOME_ADDR    0x00
 #define WELCOME_LEN     320
@@ -56,26 +57,35 @@ enum{
     MISS
 }key_result;
 
-const GPIO_Regs* LEDs_PORT[7] = {LEDs_LED1_PORT, LEDs_LED2_PORT, LEDs_LED3_PORT, LEDs_LED4_PORT, LEDs_LED5_PORT, LEDs_LED6_PORT, LEDs_LED7_PORT};
+GPIO_Regs* LEDs_PORT[7] = {LEDs_LED1_PORT, LEDs_LED2_PORT, LEDs_LED3_PORT, LEDs_LED4_PORT, LEDs_LED5_PORT, LEDs_LED6_PORT, LEDs_LED7_PORT};
 const uint32_t LEDs_PIN[7] = {LEDs_LED1_PIN, LEDs_LED2_PIN, LEDs_LED3_PIN, LEDs_LED4_PIN, LEDs_LED5_PIN, LEDs_LED6_PIN, LEDs_LED7_PIN};
-const GPIO_Regs* KEYs_PORT[7] = {KEYs_KEY1_PORT, KEYs_KEY2_PORT, KEYs_KEY3_PORT, KEYs_KEY4_PORT, KEYs_KEY5_PORT, KEYs_KEY6_PORT, KEYs_KEY7_PORT};
+GPIO_Regs* KEYs_PORT[7] = {KEYs_KEY1_PORT, KEYs_KEY2_PORT, KEYs_KEY3_PORT, KEYs_KEY4_PORT, KEYs_KEY5_PORT, KEYs_KEY6_PORT, KEYs_KEY7_PORT};
 const uint32_t KEYs_PIN[7] = {KEYs_KEY1_PIN, KEYs_KEY2_PIN, KEYs_KEY3_PIN, KEYs_KEY4_PIN, KEYs_KEY5_PIN, KEYs_KEY6_PIN, KEYs_KEY7_PIN};
 
 const uint16_t SPEED[7] = {65535, 57343, 49151, 40959, 32767, 24575, 16383};
 const uint16_t TARGET_SCORE[7][3] = {{20, 50, 90}, {40, 100, 160}, {50, 150, 240}, {80, 250, 320}, {100, 280, 390}, {120, 300, 460}, {150, 300, 540}};
 
-bool        key_state[7],is_key_triggered[7];
-bool        is_LED_active;
+bool        key_state[7];
+volatile bool is_key_triggered[7];
+volatile bool is_LED_active;
 uint8_t     key_stable_cnt[7];
-uint8_t     difficulty,level,target1,target2,game_prog;
+uint8_t     difficulty,level;
+volatile uint8_t target1,target2,game_prog;
 uint16_t    buffer1[512],buffer2[512];
 uint16_t    play_prog1,play_prog2,score;
 
-SPIF_HandleTypeDef *Handle;
+static SPIF_HandleTypeDef gSpifHandle;
+SPIF_HandleTypeDef *Handle = &gSpifHandle;
+
+static void LoadNextAudioChunk(uint16_t *dst)
+{
+    uint32_t addr = ((uint32_t)play_prog1++) * AUDIO_CHUNK_BYTES;
+    (void)SPIF_ReadAddress(Handle, addr, (uint8_t *)dst, AUDIO_CHUNK_BYTES);
+}
 
 void StartDMA(){
-    SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer1, 1024, 0);
-    SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer2, 1024, 0);
+    LoadNextAudioChunk(buffer1);
+    LoadNextAudioChunk(buffer2);
     DL_DMA_setSrcAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&buffer1[0]);
     DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
     DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
@@ -90,13 +100,13 @@ void FillBuffer(){
         DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
         DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
         DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
-        SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer1, 1024, 0);
+        LoadNextAudioChunk(buffer1);
         for (uint8_t i = 0; i < 7; i++){
             if ((i == target1 || i == target2) && is_key_triggered[i]){
                 play_prog2 = 1;
                 key_result = HIT;
                 is_key_triggered[i] = false;
-                DL_GPIO_clearPins(LEDs_PORT[i], LEDs_PIN[i]);
+                DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
                 if (i == target1)
                     target1 = 8;
                 else
@@ -108,7 +118,8 @@ void FillBuffer(){
                 play_prog2 = 1;
                 key_result = MISS;
                 is_key_triggered[i] = false;
-                score -= 1;
+                if (score > 0)
+                    score -= 1;
                 OLED_ShowNum(3, 10, score, 3);
             }
         }
@@ -132,13 +143,13 @@ void FillBuffer(){
         DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
         DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
         DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
-        SPIF_ReadPage(Handle, play_prog1++, (uint8_t*)buffer2, 1024, 0);
+        LoadNextAudioChunk(buffer2);
         for (uint8_t i = 0; i < 7; i++){
             if ((i == target1 || i == target2) && is_key_triggered[i]){
                 play_prog2 = 1;
                 key_result = HIT;
                 is_key_triggered[i] = false;
-                DL_GPIO_clearPins(LEDs_PORT[i], LEDs_PIN[i]);
+                DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
                 if (i == target1)
                     target1 = 8;
                 else
@@ -150,7 +161,8 @@ void FillBuffer(){
                 play_prog2 = 1;
                 key_result = MISS;
                 is_key_triggered[i] = false;
-                score -= 1;
+                if (score > 0)
+                    score -= 1;
                 OLED_ShowNum(3, 10, score, 3);
             }
         }
@@ -230,7 +242,7 @@ int main(void) {
                     DL_Timer_startCounter(TIMER_KEYs_INST);
                     diff_sel_state = SELECTED;
                 }
-                else if (diff_sel_state = CONFIRMED){
+                else if (diff_sel_state == CONFIRMED){
                     while (play_prog1 < START_ADDR + START_LEN)
                         FillBuffer();
                     DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
@@ -243,6 +255,7 @@ int main(void) {
                 else {
                     for (uint8_t i = 0; i < 7; i++){
                         if (is_key_triggered[i]){
+                            is_key_triggered[i] = false;
                             if (diff_sel_state == IDLE){
                                 play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
                                 difficulty = i;
@@ -319,7 +332,7 @@ int main(void) {
                     DL_Timer_stopCounter(TIMER_PROG_INST);
                     game_prog = 0;
                     for (uint8_t i = 0; i < 7; i++)
-                        DL_GPIO_clearPins(LEDs_PORT[i], LEDs_PIN[i]);
+                        DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
                     target1 = 8;
                     target2 = 8;
                     game_state = GAME_OVER;
@@ -378,7 +391,7 @@ void TIMER_KEYs_INST_IRQHandler(){
         case DL_TIMER_IIDX_ZERO:
             bool current_state;
             for (uint8_t i = 0; i < 7; i++){
-                current_state = DL_GPIO_readPins(KEYs_PORT[i], KEYs_PIN[i]);
+                current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
                 if (current_state == key_state[i])
                     key_stable_cnt[i] = 0;
                 else{
@@ -403,19 +416,19 @@ void TIMER_LEDs_INST_IRQHandler(){
             is_LED_active = !is_LED_active;
             if (is_LED_active){
                 target1 = rand() % 7;
-                DL_GPIO_setPins(LEDs_PORT[target1], LEDs_PIN[target1]);
+                DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target1], LEDs_PIN[target1]);
                 if (difficulty >= 4){
                     do{
                         target2 = rand() % 7;
                     }while(target2 == target1);
-                    DL_GPIO_setPins(LEDs_PORT[target2], LEDs_PIN[target2]);
+                    DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target2], LEDs_PIN[target2]);
                 }
                 else
                     target2 = 8;
             }
             else{
                 for (uint8_t i = 0; i < 7; i++)
-                    DL_GPIO_clearPins(LEDs_PORT[i], LEDs_PIN[i]);
+                    DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
                 target1 = 8;
                 target2 = 8;
             }
