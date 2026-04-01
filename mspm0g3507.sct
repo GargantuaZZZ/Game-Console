@@ -4,16 +4,17 @@
 
 LR_IROM1 0x00000000 0x00020000  {    ; load region size_region
   ER_IROM1 0x00000000 ALIGNALL 8 0x00020000  {  ; load address = execution address
-  startup_mspm0g350x_gcc.o (.intvecs, +First)
+   startup_mspm0g350x_gcc.o (.intvecs, +First)
    *(InRoot$$Sections)
    .ANY (+RO)
    .ANY (+XO)
   }
-  RW_IRAM2 0x20200000 0x00008000  {  ; RW data
+  RW_IRAM2 0x20200000 0x00007800  {  ; RW/ZI data
    .ANY (+RW +ZI)
    .ANY (.ramfunc)
-   __StackTop = 0x20208000;
   }
+  ARM_LIB_HEAP  0x20207800 EMPTY 0x00000000  { }
+  ARM_LIB_STACK 0x20208000 EMPTY -0x00000800 { }
 }
 
 LR_BCR 0x41C00000 0x00000100  {    ; load region size_region
