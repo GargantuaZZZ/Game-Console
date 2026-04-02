@@ -9,7 +9,7 @@
 
 #define KEY_PRESSED     false
 #define KEY_RELEASED    true
-#define STABLE_CNT      20
+#define STABLE_CNT      10
 #define AUDIO_CHUNK_BYTES 1024U
 
 #define WELCOME_ADDR    0x00
@@ -185,19 +185,27 @@ void FillBuffer(){
 
 int main(void) {
     SYSCFG_DL_init();
-    uint8_t i = 0;
-    // DL_GPIO_setPins(LEDs_LED1_PORT, LEDs_LED1_PIN);
-    // DL_GPIO_clearPins(LEDs_LED2_PORT, LEDs_LED2_PIN);
-    // DL_GPIO_setPins(LEDs_LED3_PORT, LEDs_LED3_PIN);
-    // DL_GPIO_clearPins(LEDs_LED4_PORT, LEDs_LED4_PIN);
-    // DL_GPIO_setPins(LEDs_LED5_PORT, LEDs_LED5_PIN);
-    // DL_GPIO_clearPins(LEDs_LED6_PORT, LEDs_LED6_PIN);
-    // DL_GPIO_setPins(LEDs_LED7_PORT, LEDs_LED7_PIN);
+    uint32_t current_state;
+    __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
+    __NVIC_EnableIRQ(DAC12_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_KEYs_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_KEYs_INST_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_LEDs_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_LEDs_INST_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_PROG_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_PROG_INST_INT_IRQN);
+    DL_Timer_startCounter(TIMER_KEYs_INST);
+    DL_Timer_startCounter(TIMER_LEDs_INST);
+    DL_Timer_startCounter(TIMER_PROG_INST);
     while (1) {
-        DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-        i = (i + 1) % 7;
-        DL_UART_transmitDataBlocking(UART0,0xA5);
-        delay_cycles(30000000);
+        // for (uint8_t i = 0; i < 7; i++){
+        //     current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
+        //     if (current_state)
+        //         DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+        //     else
+        //         DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+        // }
+        // delay_cycles(1000000);
     }
 }
 
@@ -402,65 +410,73 @@ int main(void) {
 //     }
 // }
 
-// void TIMER_KEYs_INST_IRQHandler(){
-//     switch (TIMER_KEYs_INST_INT_IRQN){
-//         case DL_TIMER_IIDX_ZERO:
-//         {
-//             bool current_state;
-//             for (uint8_t i = 0; i < 7; i++){
-//                 current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
-//                 if (current_state == key_state[i])
-//                     key_stable_cnt[i] = 0;
-//                 else{
-//                     key_stable_cnt[i]++;
-//                     if (key_stable_cnt[i] >= STABLE_CNT){
-//                         key_state[i] = current_state;
-//                         key_stable_cnt[i] = 0;
-//                         if (current_state == KEY_PRESSED)
-//                             is_key_triggered[i] = true;
-//                     }
-//                 }
-//             }
-//         }
+void TIMER_KEYs_INST_IRQHandler(){
+    switch (DL_Timer_getPendingInterrupt(TIMER_KEYs_INST)){
+        case DL_TIMER_IIDX_ZERO:
+        {
+            bool current_state;
+            for (uint8_t i = 0; i < 7; i++){
+                current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
+                if (current_state == key_state[i])
+                    key_stable_cnt[i] = 0;
+                else{
+                    key_stable_cnt[i]++;
+                    if (key_stable_cnt[i] >= STABLE_CNT){
+                        key_state[i] = current_state;
+                        key_stable_cnt[i] = 0;
+                        if (current_state == KEY_PRESSED){
+                            is_key_triggered[i] = true;
+                            DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+                        }
+                    }
+                }
+            }
+        }
 
-//         break;
-//         default:break;
-//     }
-// }
+        break;
+        default:break;
+    }
+}
 
-// void TIMER_LEDs_INST_IRQHandler(){
-//     switch (TIMER_LEDs_INST_INT_IRQN){
-//         case DL_TIMER_IIDX_ZERO:
-//             is_LED_active = !is_LED_active;
-//             if (is_LED_active){
-//                 target1 = rand() % 7;
-//                 DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target1], LEDs_PIN[target1]);
-//                 if (difficulty >= 4){
-//                     do{
-//                         target2 = rand() % 7;
-//                     }while(target2 == target1);
-//                     DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target2], LEDs_PIN[target2]);
-//                 }
-//                 else
-//                     target2 = 8;
-//             }
-//             else{
-//                 for (uint8_t i = 0; i < 7; i++)
-//                     DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-//                 target1 = 8;
-//                 target2 = 8;
-//             }
-//         break;
-//         default:break;
-//     }
-// }
+void TIMER_LEDs_INST_IRQHandler(){
+    switch (DL_Timer_getPendingInterrupt(TIMER_LEDs_INST)){
+        case DL_TIMER_IIDX_ZERO:
+            
+            DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[1], LEDs_PIN[1]);
+        
+        // is_LED_active = !is_LED_active;
+            // if (is_LED_active){
+            //     target1 = rand() % 7;
+            //     DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target1], LEDs_PIN[target1]);
+            //     if (difficulty >= 4){
+            //         do{
+            //             target2 = rand() % 7;
+            //         }while(target2 == target1);
+            //         DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target2], LEDs_PIN[target2]);
+            //     }
+            //     else
+            //         target2 = 8;
+            // }
+            // else{
+            //     for (uint8_t i = 0; i < 7; i++)
+            //         DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+            //     target1 = 8;
+            //     target2 = 8;
+            // }
+        break;
+        default:break;
+    }
+}
 
-// void TIMER_PROG_INST_IRQHandler(){
-//     switch (TIMER_PROG_INST_INT_IRQN){
-//         case DL_TIMER_IIDX_ZERO:
-//             game_prog++;
-//             OLED_WriteData(0xFF);
-//         break;
-//         default:break;
-//     }
-// }
+void TIMER_PROG_INST_IRQHandler(){
+    switch (DL_Timer_getPendingInterrupt(TIMER_PROG_INST)){
+        case DL_TIMER_IIDX_ZERO:
+            
+            DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[2], LEDs_PIN[2]);
+        
+            // game_prog++;
+            // OLED_WriteData(0xFF);
+        break;
+        default:break;
+    }
+}
