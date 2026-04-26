@@ -28,7 +28,7 @@ targets:
     excludeList: []
     settings:
       debugger: cortex-debug
-    toolchain: AC6
+    toolchain: GCC
     toolchainConfigMap:
       AC6:
         archExtensions: ""
@@ -117,7 +117,7 @@ targets:
         speed: 8000
       OpenOCD:
         baseAddr: "0x08000000"
-        bin: build\Debug\VSCode_test.hex
+        bin: build/Debug/VSCode_test.hex
         interface: jlink
         target: ti_mspm0
       pyOCD:

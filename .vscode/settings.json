@@ -1,5 +1,5 @@
 {
-    "EIDE.JLink.InstallDirectory": "D:/SEGGER/JLink_V930a",
+    "EIDE.JLink.InstallDirectory": "/Applications/SEGGER/JLink_V938a",
     "files.associations": {
         "stdio.h": "c",
         "ti_msp_dl_config.h": "c"
