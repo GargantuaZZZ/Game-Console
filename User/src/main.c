@@ -197,15 +197,11 @@ int main(void) {
     DL_Timer_startCounter(TIMER_KEYs_INST);
     DL_Timer_startCounter(TIMER_LEDs_INST);
     DL_Timer_startCounter(TIMER_PROG_INST);
+    OLED_ShowChar(1, 1, 'Z');
     while (1) {
-        // for (uint8_t i = 0; i < 7; i++){
-        //     current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
-        //     if (current_state)
-        //         DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-        //     else
-        //         DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-        // }
-        // delay_cycles(1000000);
+        DL_GPIO_togglePins(COMs_PORT, COMs_SCL_Screen_PIN);
+        DL_GPIO_togglePins(COMs_PORT, COMs_SDA_Screen_PIN);
+        delay_cycles(10000);
     }
 }
 
@@ -442,7 +438,7 @@ void TIMER_LEDs_INST_IRQHandler(){
     switch (DL_Timer_getPendingInterrupt(TIMER_LEDs_INST)){
         case DL_TIMER_IIDX_ZERO:
             
-            DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[1], LEDs_PIN[1]);
+            //DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[1], LEDs_PIN[1]);
         
         // is_LED_active = !is_LED_active;
             // if (is_LED_active){
@@ -472,7 +468,7 @@ void TIMER_PROG_INST_IRQHandler(){
     switch (DL_Timer_getPendingInterrupt(TIMER_PROG_INST)){
         case DL_TIMER_IIDX_ZERO:
             
-            DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[2], LEDs_PIN[2]);
+            //DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[2], LEDs_PIN[2]);
         
             // game_prog++;
             // OLED_WriteData(0xFF);
