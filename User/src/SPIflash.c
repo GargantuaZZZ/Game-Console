@@ -689,6 +689,33 @@ uint8_t SPIF_ReadStatus1(SPIF_HandleTypeDef *Handle)
   return SPIF_ReadReg1(Handle);
 }
 
+bool SPIF_ReleasePowerDown(SPIF_HandleTypeDef *Handle)
+{
+  uint8_t cmd = SPIF_CMD_RELEASE;
+  if (Handle == NULL)
+  {
+    return false;
+  }
+  SPIF_CsPin(Handle, 0);
+  if (SPIF_Transmit(Handle, &cmd, 1, 100) == false)
+  {
+    SPIF_CsPin(Handle, 1);
+    return false;
+  }
+  SPIF_CsPin(Handle, 1);
+  return true;
+}
+
+bool SPIF_SetWriteEnable(SPIF_HandleTypeDef *Handle)
+{
+  return SPIF_WriteEnable(Handle);
+}
+
+bool SPIF_WriteStatus1(SPIF_HandleTypeDef *Handle, uint8_t value)
+{
+  return SPIF_WriteReg1(Handle, value);
+}
+
 /**
   * @brief  Initialize the SPIF.
   * @note   Enable and configure the SPI and Set GPIO as output for CS pin on the CubeMX

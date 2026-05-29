@@ -146,6 +146,9 @@ bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs *Gpio, uint
 
 bool SPIF_ReadJedecId(SPIF_HandleTypeDef *Handle, uint8_t *manuf, uint8_t *memType, uint8_t *capacity);
 uint8_t SPIF_ReadStatus1(SPIF_HandleTypeDef *Handle);
+bool SPIF_ReleasePowerDown(SPIF_HandleTypeDef *Handle);
+bool SPIF_SetWriteEnable(SPIF_HandleTypeDef *Handle);
+bool SPIF_WriteStatus1(SPIF_HandleTypeDef *Handle, uint8_t value);
 
 bool SPIF_EraseChip(SPIF_HandleTypeDef *Handle);
 bool SPIF_EraseSector(SPIF_HandleTypeDef *Handle, uint32_t Sector);

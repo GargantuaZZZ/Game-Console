@@ -8,6 +8,7 @@
 #define SPIF_DEBUG SPIF_DEBUG_FULL
 
 #define SPIF_TEST 1
+#define SPIF_TEST_DELAY_CYCLES 100000000U
 
 #define KEY_PRESSED     false
 #define KEY_RELEASED    true
@@ -79,6 +80,15 @@ uint16_t    play_prog1,play_prog2,score;
 static SPIF_HandleTypeDef gSpifHandle;
 SPIF_HandleTypeDef *Handle = &gSpifHandle;
 
+static void SPI_Flash_SetBitrate10kHz(void)
+{
+    /* outputBitRate = spiInputClock / ((1 + SCR) * 2)
+       10 kHz = 32 MHz / ((1 + SCR) * 2) -> SCR = 1599 */
+    DL_SPI_disable(SPI_Flash_INST);
+    DL_SPI_setBitRateSerialClockDivider(SPI_Flash_INST, 1599U);
+    DL_SPI_enable(SPI_Flash_INST);
+}
+
 static void SPIF_Test(void)
 {
     uint8_t tx[256];
@@ -87,6 +97,8 @@ static void SPIF_Test(void)
     uint8_t mem_type = 0;
     uint8_t capacity = 0;
     uint8_t status1 = 0;
+    uint8_t status1_after_wel = 0;
+    uint8_t bp_bits = 0;
     uint16_t mismatch_index = 0xFFFF;
     bool ok = true;
 
@@ -98,18 +110,79 @@ static void SPIF_Test(void)
         return;
     }
 
+    if (SPIF_ReleasePowerDown(Handle) == false)
+    {
+        OLED_Clear();
+        OLED_ShowString(1, 1, "WAKE");
+        OLED_ShowString(2, 1, "FAIL");
+        return;
+    }
+
     if (SPIF_ReadJedecId(Handle, &manuf, &mem_type, &capacity) == false)
     {
+        OLED_Clear();
         OLED_ShowString(1, 1, "JEDEC");
         OLED_ShowString(2, 1, "READ FAIL");
         return;
     }
+    OLED_Clear();
+    OLED_ShowString(1, 1, "M:");
+    OLED_ShowHexNum(1, 3, manuf, 2);
+    OLED_ShowString(1, 6, "T:");
+    OLED_ShowHexNum(1, 8, mem_type, 2);
+    OLED_ShowString(2, 1, "C:");
+    OLED_ShowHexNum(2, 3, capacity, 2);
+    delay_cycles(SPIF_TEST_DELAY_CYCLES);
+
     status1 = SPIF_ReadStatus1(Handle);
-    OLED_ShowString(1, 1, "ID:");
-    OLED_ShowHexNum(1, 4, ((uint32_t)manuf << 16) | ((uint32_t)mem_type << 8) | capacity, 6);
-    OLED_ShowString(2, 1, "S1:");
-    OLED_ShowHexNum(2, 4, status1, 2);
-    delay_cycles(3200000);
+    bp_bits = (status1 >> 2) & 0x7U;
+    OLED_Clear();
+    OLED_ShowString(1, 1, "S1:");
+    OLED_ShowHexNum(1, 4, status1, 2);
+    OLED_ShowString(1, 8, "BP:");
+    OLED_ShowHexNum(1, 11, bp_bits, 1);
+    OLED_ShowString(2, 1, "B:");
+    OLED_ShowHexNum(2, 3, status1 & 0x1U, 1);
+    OLED_ShowString(2, 6, "W:");
+    OLED_ShowHexNum(2, 8, (status1 >> 1) & 0x1U, 1);
+    delay_cycles(SPIF_TEST_DELAY_CYCLES);
+
+    if (bp_bits != 0)
+    {
+        if (SPIF_WriteStatus1(Handle, 0x00) == false)
+        {
+            OLED_Clear();
+            OLED_ShowString(1, 1, "CLR BP");
+            OLED_ShowString(2, 1, "FAIL");
+            return;
+        }
+        delay_cycles(SPIF_TEST_DELAY_CYCLES);
+        status1 = SPIF_ReadStatus1(Handle);
+        bp_bits = (status1 >> 2) & 0x7U;
+        OLED_Clear();
+        OLED_ShowString(1, 1, "S1:");
+        OLED_ShowHexNum(1, 4, status1, 2);
+        OLED_ShowString(1, 8, "BP:");
+        OLED_ShowHexNum(1, 11, bp_bits, 1);
+        OLED_ShowString(2, 1, "CLR");
+        OLED_ShowString(2, 5, "DONE");
+        delay_cycles(SPIF_TEST_DELAY_CYCLES);
+    }
+
+    if (SPIF_SetWriteEnable(Handle) == false)
+    {
+        OLED_Clear();
+        OLED_ShowString(1, 1, "WREN");
+        OLED_ShowString(2, 1, "FAIL");
+        return;
+    }
+    status1_after_wel = SPIF_ReadStatus1(Handle);
+    OLED_Clear();
+    OLED_ShowString(1, 1, "S1:");
+    OLED_ShowHexNum(1, 4, status1_after_wel, 2);
+    OLED_ShowString(2, 1, "WEL:");
+    OLED_ShowHexNum(2, 5, (status1_after_wel >> 1) & 0x1U, 1);
+    delay_cycles(SPIF_TEST_DELAY_CYCLES);
 
     for (uint16_t i = 0; i < sizeof(tx); i++)
     {
@@ -119,18 +192,21 @@ static void SPIF_Test(void)
 
     if (SPIF_EraseSector(Handle, 0) == false)
     {
+        OLED_Clear();
         OLED_ShowString(1, 1, "ERASE");
         OLED_ShowString(2, 1, "TIMEOUT");
         return;
     }
     if (SPIF_WriteAddress(Handle, 0, tx, sizeof(tx)) == false)
     {
+        OLED_Clear();
         OLED_ShowString(1, 1, "WRITE");
         OLED_ShowString(2, 1, "FAIL");
         return;
     }
     if (SPIF_ReadAddress(Handle, 0, rx, sizeof(rx)) == false)
     {
+        OLED_Clear();
         OLED_ShowString(1, 1, "READ");
         OLED_ShowString(2, 1, "FAIL");
         return;
@@ -268,6 +344,7 @@ void FillBuffer(){
 
 int main(void) {
     SYSCFG_DL_init();
+    //SPI_Flash_SetBitrate10kHz();
     //SPIF_Init(Handle, SPI_Flash_INST, COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
     uint32_t current_state;
     __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
@@ -288,12 +365,20 @@ int main(void) {
     }
 #endif
     OLED_ShowCoverIMG();
-    delay_cycles(100000000);
+    delay_cycles(50000000);
     OLED_Clear();
+    OLED_ShowString(1, 1, "Hello, World!");
+    OLED_ShowChinese(2, 1, 0);
+    uint8_t i=0;
     while (1) {
-        OLED_ShowString(1, 1, "Hello, World!");
-        OLED_ShowChinese(2, 1, 0);
-        delay_cycles(10000);
+        OLED_ShowChinese(2, 2, 1);
+        DL_GPIO_togglePins(COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
+        // DL_GPIO_togglePins(GPIO_SPI_Flash_PICO_PORT, GPIO_SPI_Flash_PICO_PIN);
+        // DL_GPIO_togglePins(GPIO_SPI_Flash_POCI_PORT, GPIO_SPI_Flash_POCI_PIN);
+        // DL_GPIO_togglePins(GPIO_SPI_Flash_SCLK_PORT, GPIO_SPI_Flash_SCLK_PIN);
+        DL_SPI_transmitDataBlocking8(SPI_Flash_INST, 0xAA);
+        OLED_ShowNum(2, 6, (i++) % 10, 1);
+        delay_cycles(20000000);
     }
 }
 
