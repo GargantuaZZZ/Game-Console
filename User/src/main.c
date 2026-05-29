@@ -3,11 +3,15 @@
 #include "inc/OLED.h"
 #include "inc/Alerts.h"
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define SPIF_DEBUG SPIF_DEBUG_FULL
 
-#define SPIF_TEST 1
+#define SPIF_TEST 0
+#define AUDIO_PCM_DEMO 0
+#define DAC_SINE_TEST 1
+#define AUDIO_PCM_FLASH_ADDR 0x00000000U
 #define SPIF_TEST_DELAY_CYCLES 20000000U
 
 #define KEY_PRESSED     false
@@ -79,6 +83,11 @@ uint16_t    play_prog1,play_prog2,score;
 
 static SPIF_HandleTypeDef gSpifHandle;
 SPIF_HandleTypeDef *Handle = &gSpifHandle;
+static uint32_t gAudioChunkCount = 0;
+
+#if AUDIO_PCM_DEMO
+#include "inc/audio_pcm.h"
+#endif
 
 static void SPIF_Test(void)
 {
@@ -251,11 +260,67 @@ static void SPIF_Test(void)
     }
 }
 
+#if DAC_SINE_TEST
+static void Dac_SineTest(void)
+{
+    static const uint16_t sine_lut[32] = {
+        2048, 2447, 2831, 3185, 3495, 3750, 3940, 4055,
+        4095, 4055, 3940, 3750, 3495, 3185, 2831, 2447,
+        2048, 1648, 1264, 910, 600, 345, 155, 40,
+        0, 40, 155, 345, 600, 910, 1264, 1648
+    };
+    while (1)
+    {
+        for (uint32_t i = 0; i < 32; i++)
+        {
+            DAC0->DATA0 = sine_lut[i];
+            DL_Common_delayCycles(4000);
+        }
+    }
+}
+#endif
+
 static void LoadNextAudioChunk(uint16_t *dst)
 {
+#if AUDIO_PCM_DEMO
+    if (gAudioChunkCount != 0 && play_prog1 >= gAudioChunkCount)
+    {
+        memset(dst, 0, AUDIO_CHUNK_BYTES);
+        return;
+    }
+#endif
     uint32_t addr = ((uint32_t)play_prog1++) * AUDIO_CHUNK_BYTES;
     (void)SPIF_ReadAddress(Handle, addr, (uint8_t *)dst, AUDIO_CHUNK_BYTES);
 }
+
+#if AUDIO_PCM_DEMO
+static bool ProgramAudioPcmToFlash(void)
+{
+    uint32_t total = audio_pcm_len_bytes;
+    uint32_t start_sector = SPIF_AddressToSector(AUDIO_PCM_FLASH_ADDR);
+    uint32_t sector_count = (total + SPIF_SECTOR_SIZE - 1U) / SPIF_SECTOR_SIZE;
+
+    if (SPIF_Init(Handle) == false)
+    {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < sector_count; i++)
+    {
+        if (SPIF_EraseSector(Handle, start_sector + i) == false)
+        {
+            return false;
+        }
+    }
+
+    if (SPIF_WriteAddress(Handle, AUDIO_PCM_FLASH_ADDR, (uint8_t *)audio_pcm, total) == false)
+    {
+        return false;
+    }
+
+    return true;
+}
+#endif
 
 void StartDMA(){
     LoadNextAudioChunk(buffer1);
@@ -377,6 +442,27 @@ int main(void) {
 #if SPIF_TEST
     SPIF_Test();
     while (1) {
+    }
+#endif
+#if DAC_SINE_TEST
+    Dac_SineTest();
+#endif
+#if AUDIO_PCM_DEMO
+    if (ProgramAudioPcmToFlash() == false)
+    {
+        OLED_Clear();
+        OLED_ShowString(1, 1, "PCM WR");
+        OLED_ShowString(2, 1, "FAIL");
+        while (1) {
+        }
+    }
+    gAudioChunkCount = (audio_pcm_len_bytes + AUDIO_CHUNK_BYTES - 1U) / AUDIO_CHUNK_BYTES;
+    play_prog1 = 0;
+    buffer_state = IDLE_BUF2;
+    StartDMA();
+    while (1)
+    {
+        FillBuffer();
     }
 #endif
     OLED_ShowCoverIMG();
