@@ -175,7 +175,7 @@ uint8_t SPIF_SoftSPI_Transfer(uint8_t tx)
 bool SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
-  for (uint8_t i = 0; i < Size; i++){
+  for (size_t i = 0; i < Size; i++){
     Rx[i] = SPIF_SoftSPI_Transfer(Tx[i]);
   }
   retVal = true;
@@ -187,7 +187,7 @@ bool SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, 
 bool SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
-  for (uint8_t i = 0; i < Size; i++)
+  for (size_t i = 0; i < Size; i++)
     (void)SPIF_SoftSPI_Transfer(Tx[i]);
   retVal = true;
   return retVal;
@@ -198,7 +198,7 @@ bool SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_
 bool SPIF_Receive(SPIF_HandleTypeDef *Handle, uint8_t *Rx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
-  for (uint8_t i = 0; i < Size; i++){
+  for (size_t i = 0; i < Size; i++){
     Rx[i] = SPIF_SoftSPI_Transfer(SPIF_DUMMY_BYTE);
   }
   retVal = true;
@@ -778,8 +778,10 @@ bool SPIF_Init(SPIF_HandleTypeDef *Handle)
       DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
       DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
     DL_GPIO_initDigitalInputFeatures(COMs_POCI_Flash_IOMUX,
-      DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+      DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
       DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+
+    DL_GPIO_disableOutput(COMs_POCI_Flash_PORT, COMs_POCI_Flash_PIN);
 
     DL_GPIO_enableOutput(COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
     DL_GPIO_enableOutput(COMs_SCLK_Flash_PORT, COMs_SCLK_Flash_PIN);

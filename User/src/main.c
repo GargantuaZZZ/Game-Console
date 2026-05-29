@@ -8,7 +8,7 @@
 #define SPIF_DEBUG SPIF_DEBUG_FULL
 
 #define SPIF_TEST 1
-#define SPIF_TEST_DELAY_CYCLES 100000000U
+#define SPIF_TEST_DELAY_CYCLES 20000000U
 
 #define KEY_PRESSED     false
 #define KEY_RELEASED    true
@@ -175,6 +175,10 @@ static void SPIF_Test(void)
     OLED_ShowHexNum(2, 5, (status1_after_wel >> 1) & 0x1U, 1);
     delay_cycles(SPIF_TEST_DELAY_CYCLES);
 
+    OLED_Clear();
+    OLED_ShowString(1, 1, "ERASE");
+    OLED_ShowString(2, 1, "START");
+
     for (uint16_t i = 0; i < sizeof(tx); i++)
     {
         tx[i] = (uint8_t)(i ^ 0xA5U);
@@ -188,6 +192,14 @@ static void SPIF_Test(void)
         OLED_ShowString(2, 1, "TIMEOUT");
         return;
     }
+    OLED_Clear();
+    OLED_ShowString(1, 1, "ERASE");
+    OLED_ShowString(2, 1, "OK");
+    delay_cycles(SPIF_TEST_DELAY_CYCLES);
+
+    OLED_Clear();
+    OLED_ShowString(1, 1, "WRITE");
+    OLED_ShowString(2, 1, "START");
     if (SPIF_WriteAddress(Handle, 0, tx, sizeof(tx)) == false)
     {
         OLED_Clear();
@@ -195,6 +207,14 @@ static void SPIF_Test(void)
         OLED_ShowString(2, 1, "FAIL");
         return;
     }
+    OLED_Clear();
+    OLED_ShowString(1, 1, "WRITE");
+    OLED_ShowString(2, 1, "OK");
+    delay_cycles(SPIF_TEST_DELAY_CYCLES);
+
+    OLED_Clear();
+    OLED_ShowString(1, 1, "READ");
+    OLED_ShowString(2, 1, "START");
     if (SPIF_ReadAddress(Handle, 0, rx, sizeof(rx)) == false)
     {
         OLED_Clear();
@@ -202,6 +222,10 @@ static void SPIF_Test(void)
         OLED_ShowString(2, 1, "FAIL");
         return;
     }
+    OLED_Clear();
+    OLED_ShowString(1, 1, "READ");
+    OLED_ShowString(2, 1, "OK");
+    delay_cycles(SPIF_TEST_DELAY_CYCLES);
 
     for (uint16_t i = 0; i < sizeof(tx); i++)
     {
