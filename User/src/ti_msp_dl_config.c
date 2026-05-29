@@ -42,7 +42,6 @@
 
 DL_TimerA_backupConfig gTIMER_LEDsBackup;
 DL_TimerA_backupConfig gTIMER_PROGBackup;
-DL_SPI_backupConfig gSPI_FlashBackup;
 
 /*
  *  ======== SYSCFG_DL_init ========
@@ -58,14 +57,12 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_TIMER_LEDs_init();
     SYSCFG_DL_TIMER_PROG_init();
     SYSCFG_DL_UART_Debug_init();
-    SYSCFG_DL_SPI_Flash_init();
     SYSCFG_DL_DMA_init();
     SYSCFG_DL_DAC12_init();
     /* Ensure backup structures have no valid state */
 	gTIMER_LEDsBackup.backupRdy 	= false;
 	gTIMER_PROGBackup.backupRdy 	= false;
 
-	gSPI_FlashBackup.backupRdy 	= false;
 
 }
 /*
@@ -78,7 +75,6 @@ SYSCONFIG_WEAK bool SYSCFG_DL_saveConfiguration(void)
 
 	retStatus &= DL_TimerA_saveConfiguration(TIMER_LEDs_INST, &gTIMER_LEDsBackup);
 	retStatus &= DL_TimerA_saveConfiguration(TIMER_PROG_INST, &gTIMER_PROGBackup);
-	retStatus &= DL_SPI_saveConfiguration(SPI_Flash_INST, &gSPI_FlashBackup);
 
     return retStatus;
 }
@@ -90,7 +86,6 @@ SYSCONFIG_WEAK bool SYSCFG_DL_restoreConfiguration(void)
 
 	retStatus &= DL_TimerA_restoreConfiguration(TIMER_LEDs_INST, &gTIMER_LEDsBackup, false);
 	retStatus &= DL_TimerA_restoreConfiguration(TIMER_PROG_INST, &gTIMER_PROGBackup, false);
-	retStatus &= DL_SPI_restoreConfiguration(SPI_Flash_INST, &gSPI_FlashBackup);
 
     return retStatus;
 }
@@ -103,7 +98,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_TimerA_reset(TIMER_LEDs_INST);
     DL_TimerA_reset(TIMER_PROG_INST);
     DL_UART_Main_reset(UART_Debug_INST);
-    DL_SPI_reset(SPI_Flash_INST);
 
     DL_DAC12_reset(DAC0);
 
@@ -113,7 +107,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_TimerA_enablePower(TIMER_LEDs_INST);
     DL_TimerA_enablePower(TIMER_PROG_INST);
     DL_UART_Main_enablePower(UART_Debug_INST);
-    DL_SPI_enablePower(SPI_Flash_INST);
 
     DL_DAC12_enablePower(DAC0);
     delay_cycles(POWER_STARTUP_DELAY);
@@ -126,13 +119,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
         GPIO_UART_Debug_IOMUX_TX, GPIO_UART_Debug_IOMUX_TX_FUNC);
     DL_GPIO_initPeripheralInputFunction(
         GPIO_UART_Debug_IOMUX_RX, GPIO_UART_Debug_IOMUX_RX_FUNC);
-
-    DL_GPIO_initPeripheralOutputFunction(
-        GPIO_SPI_Flash_IOMUX_SCLK, GPIO_SPI_Flash_IOMUX_SCLK_FUNC);
-    DL_GPIO_initPeripheralOutputFunction(
-        GPIO_SPI_Flash_IOMUX_PICO, GPIO_SPI_Flash_IOMUX_PICO_FUNC);
-    DL_GPIO_initPeripheralInputFunction(
-        GPIO_SPI_Flash_IOMUX_POCI, GPIO_SPI_Flash_IOMUX_POCI_FUNC);
 
     DL_GPIO_initDigitalOutput(LEDs_LED1_IOMUX);
 
@@ -182,6 +168,12 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 
     DL_GPIO_initDigitalOutput(COMs_SDA_Screen_IOMUX);
 
+    DL_GPIO_initDigitalOutput(COMs_SCLK_Flash_IOMUX);
+
+    DL_GPIO_initDigitalOutput(COMs_POCI_Flash_IOMUX);
+
+    DL_GPIO_initDigitalOutput(COMs_PICO_Flash_IOMUX);
+
     DL_GPIO_clearPins(GPIOA, LEDs_LED2_PIN |
 		LEDs_LED3_PIN |
 		LEDs_LED4_PIN |
@@ -196,12 +188,18 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		LEDs_LED5_PIN |
 		LEDs_LED6_PIN |
 		LEDs_LED7_PIN |
-		COMs_CS_Flash_PIN);
+		COMs_CS_Flash_PIN |
+		COMs_SCLK_Flash_PIN |
+		COMs_POCI_Flash_PIN |
+		COMs_PICO_Flash_PIN);
     DL_GPIO_enableOutput(GPIOB, LEDs_LED1_PIN |
 		LEDs_LED5_PIN |
 		LEDs_LED6_PIN |
 		LEDs_LED7_PIN |
-		COMs_CS_Flash_PIN);
+		COMs_CS_Flash_PIN |
+		COMs_SCLK_Flash_PIN |
+		COMs_POCI_Flash_PIN |
+		COMs_PICO_Flash_PIN);
 
 }
 
@@ -364,38 +362,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_UART_Debug_init(void)
 
 
     DL_UART_Main_enable(UART_Debug_INST);
-}
-
-static const DL_SPI_Config gSPI_Flash_config = {
-    .mode        = DL_SPI_MODE_CONTROLLER,
-    .frameFormat = DL_SPI_FRAME_FORMAT_MOTO3_POL0_PHA0,
-    .parity      = DL_SPI_PARITY_NONE,
-    .dataSize    = DL_SPI_DATA_SIZE_8,
-    .bitOrder    = DL_SPI_BIT_ORDER_MSB_FIRST,
-};
-
-static const DL_SPI_ClockConfig gSPI_Flash_clockConfig = {
-    .clockSel    = DL_SPI_CLOCK_BUSCLK,
-    .divideRatio = DL_SPI_CLOCK_DIVIDE_RATIO_1
-};
-
-SYSCONFIG_WEAK void SYSCFG_DL_SPI_Flash_init(void) {
-    DL_SPI_setClockConfig(SPI_Flash_INST, (DL_SPI_ClockConfig *) &gSPI_Flash_clockConfig);
-
-    DL_SPI_init(SPI_Flash_INST, (DL_SPI_Config *) &gSPI_Flash_config);
-
-    /* Configure Controller mode */
-    /*
-     * Set the bit rate clock divider to generate the serial output clock
-     *     outputBitRate = (spiInputClock) / ((1 + SCR) * 2)
-     *     8000000 = (32000000)/((1 + 1) * 2)
-     */
-    DL_SPI_setBitRateSerialClockDivider(SPI_Flash_INST, 1);
-    /* Set RX and TX FIFO threshold levels */
-    DL_SPI_setFIFOThreshold(SPI_Flash_INST, DL_SPI_RX_FIFO_LEVEL_1_2_FULL, DL_SPI_TX_FIFO_LEVEL_1_2_EMPTY);
-
-    /* Enable module */
-    DL_SPI_enable(SPI_Flash_INST);
 }
 
 static const DL_DMA_Config gDMA_CH0Config = {

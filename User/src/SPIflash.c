@@ -18,6 +18,10 @@
 
 #define SPIF_DUMMY_BYTE 0xA5
 
+/* Soft SPI timing control (lower = faster) */
+#define SPIF_SOFTSPI_DELAY_CYCLES 8U
+#define SPIF_SOFTSPI_DELAY()      DL_Common_delayCycles(SPIF_SOFTSPI_DELAY_CYCLES)
+
 #define SPIF_CMD_READSFDP 0x5A
 #define SPIF_CMD_ID 0x90
 #define SPIF_CMD_JEDECID 0x9F
@@ -86,6 +90,7 @@ void     SPIF_Delay(uint32_t Delay);
 void     SPIF_Lock(SPIF_HandleTypeDef *Handle);
 void     SPIF_UnLock(SPIF_HandleTypeDef *Handle);
 void     SPIF_CsPin(SPIF_HandleTypeDef *Handle, bool Select);
+uint8_t  SPIF_SoftSPI_Transfer(uint8_t tx);
 bool     SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, size_t Size, uint32_t Timeout);
 bool     SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_t Timeout);
 bool     SPIF_Receive(SPIF_HandleTypeDef *Handle, uint8_t *Rx, size_t Size, uint32_t Timeout);
@@ -140,12 +145,38 @@ void SPIF_CsPin(SPIF_HandleTypeDef *Handle, bool Select)
 
 /***********************************************************************************************************/
 
+uint8_t SPIF_SoftSPI_Transfer(uint8_t tx)
+{
+  uint8_t rx = 0;
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    if (tx & 0x80)
+      DL_GPIO_setPins(COMs_PICO_Flash_PORT, COMs_PICO_Flash_PIN);
+    else
+      DL_GPIO_clearPins(COMs_PICO_Flash_PORT, COMs_PICO_Flash_PIN);
+
+    SPIF_SOFTSPI_DELAY();
+    DL_GPIO_setPins(COMs_SCLK_Flash_PORT, COMs_SCLK_Flash_PIN);
+    SPIF_SOFTSPI_DELAY();
+
+    rx <<= 1;
+    if (DL_GPIO_readPins(COMs_POCI_Flash_PORT, COMs_POCI_Flash_PIN) != 0)
+      rx |= 0x01;
+
+    DL_GPIO_clearPins(COMs_SCLK_Flash_PORT, COMs_SCLK_Flash_PIN);
+    SPIF_SOFTSPI_DELAY();
+    tx <<= 1;
+  }
+  return rx;
+}
+
+/***********************************************************************************************************/
+
 bool SPIF_TransmitReceive(SPIF_HandleTypeDef *Handle, uint8_t *Tx, uint8_t *Rx, size_t Size, uint32_t Timeout)
 {
   bool retVal = false;
   for (uint8_t i = 0; i < Size; i++){
-    DL_SPI_transmitDataBlocking8(Handle->HSpi, Tx[i]);
-    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->HSpi);
+    Rx[i] = SPIF_SoftSPI_Transfer(Tx[i]);
   }
   retVal = true;
   return retVal;
@@ -157,7 +188,7 @@ bool SPIF_Transmit(SPIF_HandleTypeDef *Handle, uint8_t *Tx, size_t Size, uint32_
 {
   bool retVal = false;
   for (uint8_t i = 0; i < Size; i++)
-    DL_SPI_transmitDataBlocking8(Handle->HSpi, Tx[i]);
+    (void)SPIF_SoftSPI_Transfer(Tx[i]);
   retVal = true;
   return retVal;
 }
@@ -168,8 +199,7 @@ bool SPIF_Receive(SPIF_HandleTypeDef *Handle, uint8_t *Rx, size_t Size, uint32_t
 {
   bool retVal = false;
   for (uint8_t i = 0; i < Size; i++){
-    DL_SPI_transmitData8(Handle->HSpi, SPIF_DUMMY_BYTE);
-    Rx[i]=DL_SPI_receiveDataBlocking8(Handle->HSpi);
+    Rx[i] = SPIF_SoftSPI_Transfer(SPIF_DUMMY_BYTE);
   }
   retVal = true;
   return retVal;
@@ -718,29 +748,45 @@ bool SPIF_WriteStatus1(SPIF_HandleTypeDef *Handle, uint8_t value)
 
 /**
   * @brief  Initialize the SPIF.
-  * @note   Enable and configure the SPI and Set GPIO as output for CS pin on the CubeMX
+  * @note   Configure GPIOs for bit-bang SPI.
   *
   * @param  *Handle: Pointer to SPIF_HandleTypeDef structure
-  * @param  *HSpi: Pointer to a SPI_HandleTypeDef structure
-  * @param  *Gpio: Pointer to a GPIO_TypeDef structure for CS
-  * @param  Pin: Pin of CS
   *
   * @retval bool: true or false
   */
-bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs  *Gpio, uint32_t Pin)
+bool SPIF_Init(SPIF_HandleTypeDef *Handle)
 {
   bool retVal = false;
   do
   {
-    if ((Handle == NULL) || (HSpi == NULL) || (Gpio == NULL) || (Handle->Inited == 1))
+    if ((Handle == NULL) || (Handle->Inited == 1))
     {
       dprintf("SPIF_Init() Error, Wrong Parameter\r\n");
       break;
     }
     memset(Handle, 0, sizeof(SPIF_HandleTypeDef));
-    Handle->HSpi = HSpi;
-    Handle->Gpio = Gpio;
-    Handle->Pin = Pin;
+    Handle->Gpio = COMs_CS_Flash_PORT;
+    Handle->Pin = COMs_CS_Flash_PIN;
+    /* Reconfigure SPI pins as GPIO for bit-bang SPI */
+    DL_GPIO_initDigitalOutputFeatures(COMs_CS_Flash_IOMUX,
+      DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+      DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
+    DL_GPIO_initDigitalOutputFeatures(COMs_SCLK_Flash_IOMUX,
+      DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+      DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
+    DL_GPIO_initDigitalOutputFeatures(COMs_PICO_Flash_IOMUX,
+      DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+      DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
+    DL_GPIO_initDigitalInputFeatures(COMs_POCI_Flash_IOMUX,
+      DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+      DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+
+    DL_GPIO_enableOutput(COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
+    DL_GPIO_enableOutput(COMs_SCLK_Flash_PORT, COMs_SCLK_Flash_PIN);
+    DL_GPIO_enableOutput(COMs_PICO_Flash_PORT, COMs_PICO_Flash_PIN);
+
+    DL_GPIO_clearPins(COMs_SCLK_Flash_PORT, COMs_SCLK_Flash_PIN);
+    DL_GPIO_clearPins(COMs_PICO_Flash_PORT, COMs_PICO_Flash_PIN);
     SPIF_CsPin(Handle, 1);
     /* wait for stable VCC */
     // while (HAL_GetTick() < 20)

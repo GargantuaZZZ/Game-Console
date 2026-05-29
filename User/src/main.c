@@ -80,15 +80,6 @@ uint16_t    play_prog1,play_prog2,score;
 static SPIF_HandleTypeDef gSpifHandle;
 SPIF_HandleTypeDef *Handle = &gSpifHandle;
 
-static void SPI_Flash_SetBitrate10kHz(void)
-{
-    /* outputBitRate = spiInputClock / ((1 + SCR) * 2)
-       10 kHz = 32 MHz / ((1 + SCR) * 2) -> SCR = 1599 */
-    DL_SPI_disable(SPI_Flash_INST);
-    DL_SPI_setBitRateSerialClockDivider(SPI_Flash_INST, 1599U);
-    DL_SPI_enable(SPI_Flash_INST);
-}
-
 static void SPIF_Test(void)
 {
     uint8_t tx[256];
@@ -103,7 +94,7 @@ static void SPIF_Test(void)
     bool ok = true;
 
     OLED_Clear();
-    if (SPIF_Init(Handle, SPI_Flash_INST, COMs_CS_Flash_PORT, COMs_CS_Flash_PIN) == false)
+    if (SPIF_Init(Handle) == false)
     {
         OLED_ShowString(1, 1, "SPIF INIT");
         OLED_ShowString(2, 1, "FAIL");
@@ -345,7 +336,7 @@ void FillBuffer(){
 int main(void) {
     SYSCFG_DL_init();
     //SPI_Flash_SetBitrate10kHz();
-    //SPIF_Init(Handle, SPI_Flash_INST, COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
+    //SPIF_Init(Handle);
     uint32_t current_state;
     __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
     __NVIC_EnableIRQ(DAC12_INT_IRQN);
@@ -376,7 +367,6 @@ int main(void) {
         // DL_GPIO_togglePins(GPIO_SPI_Flash_PICO_PORT, GPIO_SPI_Flash_PICO_PIN);
         // DL_GPIO_togglePins(GPIO_SPI_Flash_POCI_PORT, GPIO_SPI_Flash_POCI_PIN);
         // DL_GPIO_togglePins(GPIO_SPI_Flash_SCLK_PORT, GPIO_SPI_Flash_SCLK_PIN);
-        DL_SPI_transmitDataBlocking8(SPI_Flash_INST, 0xAA);
         OLED_ShowNum(2, 6, (i++) % 10, 1);
         delay_cycles(20000000);
     }
@@ -392,7 +382,7 @@ int main(void) {
 //     __NVIC_EnableIRQ(TIMER_LEDs_INST_INT_IRQN);
 //     __NVIC_ClearPendingIRQ(TIMER_PROG_INST_INT_IRQN);
 //     __NVIC_EnableIRQ(TIMER_PROG_INST_INT_IRQN);
-//     SPIF_Init(Handle, SPI_Flash_INST, COMs_PORT, COMs_CS_Flash_PIN);
+//     SPIF_Init(Handle);
 
 //     for (uint8_t i = 0; i < 7; i++){
 //         key_state[i] = KEY_RELEASED;
