@@ -103,6 +103,7 @@ GPIO3.associatedPins[2].pin.$assign = "PA16";
 GPIO3.associatedPins[3].$name       = "SCLK_Flash";
 GPIO3.associatedPins[3].pin.$assign = "PB9";
 GPIO3.associatedPins[4].$name       = "POCI_Flash";
+GPIO3.associatedPins[4].direction   = "INPUT";
 GPIO3.associatedPins[4].pin.$assign = "PB7";
 GPIO3.associatedPins[5].$name       = "PICO_Flash";
 GPIO3.associatedPins[5].pin.$assign = "PB8";

@@ -170,7 +170,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 
     DL_GPIO_initDigitalOutput(COMs_SCLK_Flash_IOMUX);
 
-    DL_GPIO_initDigitalOutput(COMs_POCI_Flash_IOMUX);
+    DL_GPIO_initDigitalInput(COMs_POCI_Flash_IOMUX);
 
     DL_GPIO_initDigitalOutput(COMs_PICO_Flash_IOMUX);
 
@@ -190,7 +190,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		LEDs_LED7_PIN |
 		COMs_CS_Flash_PIN |
 		COMs_SCLK_Flash_PIN |
-		COMs_POCI_Flash_PIN |
 		COMs_PICO_Flash_PIN);
     DL_GPIO_enableOutput(GPIOB, LEDs_LED1_PIN |
 		LEDs_LED5_PIN |
@@ -198,7 +197,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		LEDs_LED7_PIN |
 		COMs_CS_Flash_PIN |
 		COMs_SCLK_Flash_PIN |
-		COMs_POCI_Flash_PIN |
 		COMs_PICO_Flash_PIN);
 
 }
