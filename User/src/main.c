@@ -91,7 +91,7 @@ static void SPIF_Test(void)
     bool ok = true;
 
     OLED_Clear();
-    if (SPIF_Init(Handle, SPI_Flash_INST, COMs_PORT, COMs_CS_Flash_PIN) == false)
+    if (SPIF_Init(Handle, SPI_Flash_INST, COMs_CS_Flash_PORT, COMs_CS_Flash_PIN) == false)
     {
         OLED_ShowString(1, 1, "SPIF INIT");
         OLED_ShowString(2, 1, "FAIL");
@@ -268,6 +268,7 @@ void FillBuffer(){
 
 int main(void) {
     SYSCFG_DL_init();
+    //SPIF_Init(Handle, SPI_Flash_INST, COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
     uint32_t current_state;
     __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
     __NVIC_EnableIRQ(DAC12_INT_IRQN);
@@ -290,8 +291,6 @@ int main(void) {
     delay_cycles(100000000);
     OLED_Clear();
     while (1) {
-        // DL_GPIO_togglePins(COMs_PORT, COMs_SCL_Screen_PIN);
-        // DL_GPIO_togglePins(COMs_PORT, COMs_SDA_Screen_PIN);
         OLED_ShowString(1, 1, "Hello, World!");
         OLED_ShowChinese(2, 1, 0);
         delay_cycles(10000);

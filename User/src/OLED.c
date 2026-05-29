@@ -2,10 +2,10 @@
 #include "inc/OLED_Font.h"
 
 /*引脚配置*/
-#define OLED_W_SCL_H		DL_GPIO_setPins(COMs_PORT, COMs_SCL_Screen_PIN)
-#define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_PORT, COMs_SCL_Screen_PIN)
-#define OLED_W_SDA_H		DL_GPIO_setPins(COMs_PORT, COMs_SDA_Screen_PIN)
-#define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_PORT, COMs_SDA_Screen_PIN)
+#define OLED_W_SCL_H		DL_GPIO_setPins(COMs_SCL_Screen_PORT, COMs_SCL_Screen_PIN)
+#define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_SCL_Screen_PORT, COMs_SCL_Screen_PIN)
+#define OLED_W_SDA_H		DL_GPIO_setPins(COMs_SDA_Screen_PORT, COMs_SDA_Screen_PIN)
+#define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_SDA_Screen_PORT, COMs_SDA_Screen_PIN)
 /*软I2C时序延时（调低速率）*/
 #define OLED_I2C_DELAY_CYCLES	(64U)
 #define OLED_I2C_DELAY()		DL_Common_delayCycles(OLED_I2C_DELAY_CYCLES)
