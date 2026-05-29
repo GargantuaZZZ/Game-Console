@@ -198,11 +198,14 @@ int main(void) {
     DL_Timer_startCounter(TIMER_LEDs_INST);
     DL_Timer_startCounter(TIMER_PROG_INST);
     OLED_Init();
-    OLED_ShowChar(1, 1, 'Z');
+    OLED_ShowCoverIMG();
+    delay_cycles(100000000);
+    OLED_Clear();
     while (1) {
         // DL_GPIO_togglePins(COMs_PORT, COMs_SCL_Screen_PIN);
         // DL_GPIO_togglePins(COMs_PORT, COMs_SDA_Screen_PIN);
-        OLED_ShowString(2, 2, "Hello, World!");
+        OLED_ShowString(1, 1, "Hello, World!");
+        OLED_ShowChinese(2, 1, 0);
         delay_cycles(10000);
     }
 }
