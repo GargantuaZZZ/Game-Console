@@ -7,6 +7,8 @@
 
 #define SPIF_DEBUG SPIF_DEBUG_FULL
 
+#define SPIF_TEST 1
+
 #define KEY_PRESSED     false
 #define KEY_RELEASED    true
 #define STABLE_CNT      10
@@ -76,6 +78,87 @@ uint16_t    play_prog1,play_prog2,score;
 
 static SPIF_HandleTypeDef gSpifHandle;
 SPIF_HandleTypeDef *Handle = &gSpifHandle;
+
+static void SPIF_Test(void)
+{
+    uint8_t tx[256];
+    uint8_t rx[256];
+    uint8_t manuf = 0;
+    uint8_t mem_type = 0;
+    uint8_t capacity = 0;
+    uint8_t status1 = 0;
+    uint16_t mismatch_index = 0xFFFF;
+    bool ok = true;
+
+    OLED_Clear();
+    if (SPIF_Init(Handle, SPI_Flash_INST, COMs_PORT, COMs_CS_Flash_PIN) == false)
+    {
+        OLED_ShowString(1, 1, "SPIF INIT");
+        OLED_ShowString(2, 1, "FAIL");
+        return;
+    }
+
+    if (SPIF_ReadJedecId(Handle, &manuf, &mem_type, &capacity) == false)
+    {
+        OLED_ShowString(1, 1, "JEDEC");
+        OLED_ShowString(2, 1, "READ FAIL");
+        return;
+    }
+    status1 = SPIF_ReadStatus1(Handle);
+    OLED_ShowString(1, 1, "ID:");
+    OLED_ShowHexNum(1, 4, ((uint32_t)manuf << 16) | ((uint32_t)mem_type << 8) | capacity, 6);
+    OLED_ShowString(2, 1, "S1:");
+    OLED_ShowHexNum(2, 4, status1, 2);
+    delay_cycles(3200000);
+
+    for (uint16_t i = 0; i < sizeof(tx); i++)
+    {
+        tx[i] = (uint8_t)(i ^ 0xA5U);
+        rx[i] = 0;
+    }
+
+    if (SPIF_EraseSector(Handle, 0) == false)
+    {
+        OLED_ShowString(1, 1, "ERASE");
+        OLED_ShowString(2, 1, "TIMEOUT");
+        return;
+    }
+    if (SPIF_WriteAddress(Handle, 0, tx, sizeof(tx)) == false)
+    {
+        OLED_ShowString(1, 1, "WRITE");
+        OLED_ShowString(2, 1, "FAIL");
+        return;
+    }
+    if (SPIF_ReadAddress(Handle, 0, rx, sizeof(rx)) == false)
+    {
+        OLED_ShowString(1, 1, "READ");
+        OLED_ShowString(2, 1, "FAIL");
+        return;
+    }
+
+    for (uint16_t i = 0; i < sizeof(tx); i++)
+    {
+        if (rx[i] != tx[i])
+        {
+            mismatch_index = i;
+            ok = false;
+            break;
+        }
+    }
+
+    OLED_Clear();
+    if (ok)
+    {
+        OLED_ShowString(1, 1, "SPIF OK");
+        OLED_ShowString(2, 1, "RD/WR OK");
+    }
+    else
+    {
+        OLED_ShowString(1, 1, "SPIF FAIL");
+        OLED_ShowString(2, 1, "I:");
+        OLED_ShowHexNum(2, 3, mismatch_index, 4);
+    }
+}
 
 static void LoadNextAudioChunk(uint16_t *dst)
 {
@@ -198,6 +281,11 @@ int main(void) {
     DL_Timer_startCounter(TIMER_LEDs_INST);
     DL_Timer_startCounter(TIMER_PROG_INST);
     OLED_Init();
+#if SPIF_TEST
+    SPIF_Test();
+    while (1) {
+    }
+#endif
     OLED_ShowCoverIMG();
     delay_cycles(100000000);
     OLED_Clear();

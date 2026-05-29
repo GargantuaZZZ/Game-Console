@@ -142,7 +142,10 @@ typedef struct
 **************    Public Functions
 ************************************************************************************************************/
 
-bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs *Gpio, uint16_t Pin);
+bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs *Gpio, uint32_t Pin);
+
+bool SPIF_ReadJedecId(SPIF_HandleTypeDef *Handle, uint8_t *manuf, uint8_t *memType, uint8_t *capacity);
+uint8_t SPIF_ReadStatus1(SPIF_HandleTypeDef *Handle);
 
 bool SPIF_EraseChip(SPIF_HandleTypeDef *Handle);
 bool SPIF_EraseSector(SPIF_HandleTypeDef *Handle, uint32_t Sector);

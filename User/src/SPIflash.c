@@ -171,6 +171,7 @@ bool SPIF_Receive(SPIF_HandleTypeDef *Handle, uint8_t *Rx, size_t Size, uint32_t
     DL_SPI_transmitData8(Handle->HSpi, SPIF_DUMMY_BYTE);
     Rx[i]=DL_SPI_receiveDataBlocking8(Handle->HSpi);
   }
+  retVal = true;
   return retVal;
 }
 
@@ -348,23 +349,16 @@ bool SPIF_WriteReg3(SPIF_HandleTypeDef *Handle, uint8_t Data)
 
 bool SPIF_WaitForWriting(SPIF_HandleTypeDef *Handle, uint32_t Timeout)
 {
-  bool retVal = false;
-  //uint32_t startTime = HAL_GetTick();
-  while (1)
+  for (uint32_t i = 0; i < Timeout; i++)
   {
     SPIF_Delay(1);
-    // if (HAL_GetTick() - startTime >= Timeout)
-    // {
-    //   dprintf("SPIF_WaitForWriting() TIMEOUT\r\n");
-    //   break;
-    // }
     if ((SPIF_ReadReg1(Handle) & SPIF_STATUS1_BUSY) == 0)
     {
-      retVal = true;
-      break;
+      return true;
     }
   }
-  return retVal;
+  dprintf("SPIF_WaitForWriting() TIMEOUT\r\n");
+  return false;
 }
 
 /***********************************************************************************************************/
@@ -666,6 +660,35 @@ bool SPIF_ReadFn(SPIF_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, ui
 **************    Public Functions
 ************************************************************************************************************/
 
+bool SPIF_ReadJedecId(SPIF_HandleTypeDef *Handle, uint8_t *manuf, uint8_t *memType, uint8_t *capacity)
+{
+  uint8_t tx[4] = {SPIF_CMD_JEDECID, 0xFF, 0xFF, 0xFF};
+  uint8_t rx[4] = {0};
+
+  if ((Handle == NULL) || (manuf == NULL) || (memType == NULL) || (capacity == NULL))
+  {
+    return false;
+  }
+
+  SPIF_CsPin(Handle, 0);
+  if (SPIF_TransmitReceive(Handle, tx, rx, 4, 100) == false)
+  {
+    SPIF_CsPin(Handle, 1);
+    return false;
+  }
+  SPIF_CsPin(Handle, 1);
+
+  *manuf = rx[1];
+  *memType = rx[2];
+  *capacity = rx[3];
+  return true;
+}
+
+uint8_t SPIF_ReadStatus1(SPIF_HandleTypeDef *Handle)
+{
+  return SPIF_ReadReg1(Handle);
+}
+
 /**
   * @brief  Initialize the SPIF.
   * @note   Enable and configure the SPI and Set GPIO as output for CS pin on the CubeMX
@@ -677,7 +700,7 @@ bool SPIF_ReadFn(SPIF_HandleTypeDef *Handle, uint32_t Address, uint8_t *Data, ui
   *
   * @retval bool: true or false
   */
-bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs  *Gpio, uint16_t Pin)
+bool SPIF_Init(SPIF_HandleTypeDef *Handle, SPI_Regs *HSpi, GPIO_Regs  *Gpio, uint32_t Pin)
 {
   bool retVal = false;
   do
