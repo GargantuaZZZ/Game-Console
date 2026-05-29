@@ -197,17 +197,17 @@ extern "C" {
 #define KEYs_KEY7_PIN                                           (DL_GPIO_PIN_26)
 #define KEYs_KEY7_IOMUX                                          (IOMUX_PINCM59)
 /* Port definition for Pin Group COMs */
-#define COMs_PORT                                                        (GPIOB)
+#define COMs_PORT                                                        (GPIOA)
 
-/* Defines for CS_Flash: GPIOB.10 with pinCMx 27 on package pin 62 */
-#define COMs_CS_Flash_PIN                                       (DL_GPIO_PIN_10)
-#define COMs_CS_Flash_IOMUX                                      (IOMUX_PINCM27)
-/* Defines for SCL_Screen: GPIOB.12 with pinCMx 29 on package pin 64 */
-#define COMs_SCL_Screen_PIN                                     (DL_GPIO_PIN_12)
-#define COMs_SCL_Screen_IOMUX                                    (IOMUX_PINCM29)
-/* Defines for SDA_Screen: GPIOB.11 with pinCMx 28 on package pin 63 */
-#define COMs_SDA_Screen_PIN                                     (DL_GPIO_PIN_11)
-#define COMs_SDA_Screen_IOMUX                                    (IOMUX_PINCM28)
+/* Defines for CS_Flash: GPIOA.18 with pinCMx 40 on package pin 11 */
+#define COMs_CS_Flash_PIN                                       (DL_GPIO_PIN_18)
+#define COMs_CS_Flash_IOMUX                                      (IOMUX_PINCM40)
+/* Defines for SCL_Screen: GPIOA.17 with pinCMx 39 on package pin 10 */
+#define COMs_SCL_Screen_PIN                                     (DL_GPIO_PIN_17)
+#define COMs_SCL_Screen_IOMUX                                    (IOMUX_PINCM39)
+/* Defines for SDA_Screen: GPIOA.16 with pinCMx 38 on package pin 9 */
+#define COMs_SDA_Screen_PIN                                     (DL_GPIO_PIN_16)
+#define COMs_SDA_Screen_IOMUX                                    (IOMUX_PINCM38)
 
 
 

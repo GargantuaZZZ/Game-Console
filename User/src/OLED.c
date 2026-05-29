@@ -6,6 +6,9 @@
 #define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_PORT, COMs_SCL_Screen_PIN)
 #define OLED_W_SDA_H		DL_GPIO_setPins(COMs_PORT, COMs_SDA_Screen_PIN)
 #define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_PORT, COMs_SDA_Screen_PIN)
+/*软I2C时序延时（调低速率）*/
+#define OLED_I2C_DELAY_CYCLES	(64U)
+#define OLED_I2C_DELAY()		DL_Common_delayCycles(OLED_I2C_DELAY_CYCLES)
 ;
 /*引脚初始化*/
 void OLED_I2C_Init(void)
@@ -22,9 +25,13 @@ void OLED_I2C_Init(void)
 void OLED_I2C_Start(void)
 {
 	OLED_W_SDA_H;
+	OLED_I2C_DELAY();
 	OLED_W_SCL_H;
+	OLED_I2C_DELAY();
 	OLED_W_SDA_L;
+	OLED_I2C_DELAY();
 	OLED_W_SCL_L;
+	OLED_I2C_DELAY();
 }
 
 /**
@@ -35,8 +42,11 @@ void OLED_I2C_Start(void)
 void OLED_I2C_Stop(void)
 {
 	OLED_W_SDA_L;
+	OLED_I2C_DELAY();
 	OLED_W_SCL_H;
+	OLED_I2C_DELAY();
 	OLED_W_SDA_H;
+	OLED_I2C_DELAY();
 }
 
 /**
@@ -53,11 +63,16 @@ void OLED_I2C_SendByte(uint8_t Byte)
 			OLED_W_SDA_H;
 		else
 			OLED_W_SDA_L;
+		OLED_I2C_DELAY();
 		OLED_W_SCL_H;
+		OLED_I2C_DELAY();
 		OLED_W_SCL_L;
+		OLED_I2C_DELAY();
 	}
 	OLED_W_SCL_H;	//额外的一个时钟，不处理应答信号
+	OLED_I2C_DELAY();
 	OLED_W_SCL_L;
+	OLED_I2C_DELAY();
 }
 
 /**

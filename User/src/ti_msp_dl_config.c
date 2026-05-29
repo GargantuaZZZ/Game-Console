@@ -184,24 +184,24 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 
     DL_GPIO_clearPins(GPIOA, LEDs_LED2_PIN |
 		LEDs_LED3_PIN |
-		LEDs_LED4_PIN);
+		LEDs_LED4_PIN |
+		COMs_CS_Flash_PIN |
+		COMs_SCL_Screen_PIN |
+		COMs_SDA_Screen_PIN);
     DL_GPIO_enableOutput(GPIOA, LEDs_LED2_PIN |
 		LEDs_LED3_PIN |
-		LEDs_LED4_PIN);
+		LEDs_LED4_PIN |
+		COMs_CS_Flash_PIN |
+		COMs_SCL_Screen_PIN |
+		COMs_SDA_Screen_PIN);
     DL_GPIO_clearPins(GPIOB, LEDs_LED1_PIN |
 		LEDs_LED5_PIN |
 		LEDs_LED6_PIN |
-		LEDs_LED7_PIN |
-		COMs_CS_Flash_PIN |
-		COMs_SCL_Screen_PIN |
-		COMs_SDA_Screen_PIN);
+		LEDs_LED7_PIN);
     DL_GPIO_enableOutput(GPIOB, LEDs_LED1_PIN |
 		LEDs_LED5_PIN |
 		LEDs_LED6_PIN |
-		LEDs_LED7_PIN |
-		COMs_CS_Flash_PIN |
-		COMs_SCL_Screen_PIN |
-		COMs_SDA_Screen_PIN);
+		LEDs_LED7_PIN);
 
 }
 
