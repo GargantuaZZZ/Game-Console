@@ -115,6 +115,8 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
 SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 {
 
+    DL_GPIO_initPeripheralAnalogFunction(GPIO_DAC12_IOMUX_OUT);
+
     DL_GPIO_initPeripheralOutputFunction(
         GPIO_UART_Debug_IOMUX_TX, GPIO_UART_Debug_IOMUX_TX_FUNC);
     DL_GPIO_initPeripheralInputFunction(
@@ -388,13 +390,13 @@ static const DL_DAC12_Config gDAC12Config = {
     .resolution                = DL_DAC12_RESOLUTION_12BIT,
     .representation            = DL_DAC12_REPRESENTATION_BINARY,
     .voltageReferenceSource    = DL_DAC12_VREF_SOURCE_VDDA_VSSA,
-    .amplifierSetting          = DL_DAC12_AMP_OFF_TRISTATE,
+    .amplifierSetting          = DL_DAC12_AMP_ON,
     .fifoEnable                = DL_DAC12_FIFO_ENABLED,
     .fifoTriggerSource         = DL_DAC12_FIFO_TRIGGER_SAMPLETIMER,
     .dmaTriggerEnable          = DL_DAC12_DMA_TRIGGER_ENABLED,
     .dmaTriggerThreshold       = DL_DAC12_FIFO_THRESHOLD_TWO_QTRS_EMPTY,
     .sampleTimeGeneratorEnable = DL_DAC12_SAMPLETIMER_ENABLE,
-    .sampleRate                = DL_DAC12_SAMPLES_PER_SECOND_1M,
+    .sampleRate                = DL_DAC12_SAMPLES_PER_SECOND_8K,
 };
 SYSCONFIG_WEAK void SYSCFG_DL_DAC12_init(void)
 {

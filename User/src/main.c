@@ -9,8 +9,25 @@
 #define SPIF_DEBUG SPIF_DEBUG_FULL
 
 #define SPIF_TEST 0
-#define AUDIO_PCM_DEMO 0
-#define DAC_SINE_TEST 1
+#define AUDIO_PCM_DEMO 1
+#define DAC_SINE_TEST 0
+// Set to 1 when using CH341 to program external SPI flash in-circuit.
+#define MCU_RELEASE_FLASH_BUS 0
+#define AUDIO_PROGRAM_FLASH_ON_BOOT 0
+#define AUDIO_EXTERNAL_FLASH_BYTES 5440000U
+#define AUDIO_USE_DMA 0
+#define AUDIO_DAC_BOOT_TONE 0
+#define AUDIO_STABLE_STREAM 1
+#define AUDIO_SAMPLE_RATE_HZ 8000U
+#define AUDIO_RING_SAMPLES 8192U
+#define AUDIO_OUTPUT_ATTENUATION_SHIFT 1U
+/*
+ * Blocking playback reads SPI flash in chunks and introduces short pauses,
+ * which lowers average sample rate. Compensate by setting a slightly higher
+ * in-chunk playback rate and tune by ear.
+ */
+#define AUDIO_BLOCKING_COMP_RATE_HZ 9000U
+#define AUDIO_BLOCKING_SAMPLE_DELAY_CYCLES (CPUCLK_FREQ / AUDIO_BLOCKING_COMP_RATE_HZ)
 #define AUDIO_PCM_FLASH_ADDR 0x00000000U
 #define SPIF_TEST_DELAY_CYCLES 20000000U
 
@@ -84,11 +101,31 @@ uint16_t    play_prog1,play_prog2,score;
 static SPIF_HandleTypeDef gSpifHandle;
 SPIF_HandleTypeDef *Handle = &gSpifHandle;
 static uint32_t gAudioChunkCount = 0;
+static bool gSpifReadFail = false;
+static volatile bool gAudioUnderflow = false;
+static volatile uint16_t gAudioRing[AUDIO_RING_SAMPLES];
+static volatile uint32_t gAudioRingRead = 0;
+static volatile uint32_t gAudioRingWrite = 0;
 
-#if AUDIO_PCM_DEMO
+static void DacBootToneTest(void)
+{
+#if AUDIO_DAC_BOOT_TONE
+    // 2s square-wave check with direct DATA0 write (bypasses FIFO trigger chain).
+    for (uint32_t n = 0; n < 2000U; n++)
+    {
+        DAC0->DATA0 = 4095U;
+        DL_Common_delayCycles(16000);
+        DAC0->DATA0 = 0U;
+        DL_Common_delayCycles(16000);
+    }
+#endif
+}
+
+#if AUDIO_PCM_DEMO && AUDIO_PROGRAM_FLASH_ON_BOOT
 #include "inc/audio_pcm.h"
 #endif
 
+#if SPIF_TEST
 static void SPIF_Test(void)
 {
     uint8_t tx[256];
@@ -259,41 +296,81 @@ static void SPIF_Test(void)
         OLED_ShowHexNum(2, 3, mismatch_index, 4);
     }
 }
+#endif
 
 #if DAC_SINE_TEST
 static void Dac_SineTest(void)
 {
-    static const uint16_t sine_lut[32] = {
-        2048, 2447, 2831, 3185, 3495, 3750, 3940, 4055,
-        4095, 4055, 3940, 3750, 3495, 3185, 2831, 2447,
-        2048, 1648, 1264, 910, 600, 345, 155, 40,
-        0, 40, 155, 345, 600, 910, 1264, 1648
-    };
+    // 显示 DAC 放大器、FIFO、输出引脚和采样率以便调试
+    DL_DAC12_AMP amp = DL_DAC12_getAmplifier(DAC0);
+    bool fifo_en = DL_DAC12_isFIFOEnabled(DAC0);
+    bool out_en = DL_DAC12_isOutputPinEnabled(DAC0);
+    DL_DAC12_SAMPLES_PER_SECOND sps = DL_DAC12_getSampleRate(DAC0);
+    DL_DAC12_FIFO_THRESHOLD thr = DL_DAC12_getFIFOThreshold(DAC0);
+
+    OLED_Clear();
+    OLED_ShowString(1, 1, "DAC DEBUG");
+    OLED_ShowString(2, 1, "AMP:");
+    OLED_ShowHexNum(2, 6, (uint32_t)amp, 2);
+    OLED_ShowString(3, 1, "FIFO:");
+    OLED_ShowString(3, 7, fifo_en ? "ON" : "OFF");
+    OLED_ShowString(4, 1, "OUT:");
+    OLED_ShowString(4, 6, out_en ? "ON" : "OFF");
+    OLED_ShowString(5, 1, "SPS:");
+    OLED_ShowHexNum(5, 6, (uint32_t)sps, 2);
+    OLED_ShowString(6, 1, "TH:");
+    OLED_ShowHexNum(6, 5, (uint32_t)thr, 2);
+
+    // 输出强力方波（在 LM386 前端用耦合电容会更容易听到）
     while (1)
     {
-        for (uint32_t i = 0; i < 32; i++)
-        {
-            DAC0->DATA0 = sine_lut[i];
-            DL_Common_delayCycles(4000);
-        }
+        // 高 -> 4095
+        DL_DAC12_outputBlocking12(DAC0, 4095);
+        DL_Common_delayCycles(20000);
+        // 低 -> 0
+        DL_DAC12_outputBlocking12(DAC0, 0);
+        DL_Common_delayCycles(20000);
     }
 }
 #endif
 
 static void LoadNextAudioChunk(uint16_t *dst)
 {
+    int16_t raw[AUDIO_CHUNK_BYTES / 2U];
+
 #if AUDIO_PCM_DEMO
     if (gAudioChunkCount != 0 && play_prog1 >= gAudioChunkCount)
     {
-        memset(dst, 0, AUDIO_CHUNK_BYTES);
-        return;
+        play_prog1 = 0;
     }
 #endif
     uint32_t addr = ((uint32_t)play_prog1++) * AUDIO_CHUNK_BYTES;
-    (void)SPIF_ReadAddress(Handle, addr, (uint8_t *)dst, AUDIO_CHUNK_BYTES);
+    if (SPIF_ReadAddress(Handle, addr, (uint8_t *)raw, AUDIO_CHUNK_BYTES) == false)
+    {
+        gSpifReadFail = true;
+        for (uint32_t i = 0; i < (AUDIO_CHUNK_BYTES / 2U); i++)
+        {
+            dst[i] = 2048U;
+        }
+        return;
+    }
+
+    // Convert signed 16-bit PCM to unsigned 12-bit DAC samples.
+    // Use unbiased mapping: int16_t (-32768..32767) -> uint32 0..65535 -> 0..4095
+    // Reserve a small headroom (2%) to avoid clipping at the amplifier.
+    for (uint32_t i = 0; i < (AUDIO_CHUNK_BYTES / 2U); i++)
+    {
+        int32_t s = (int32_t)raw[i];
+        uint32_t u = (uint32_t)(s + 32768); // 0 .. 65535
+        uint32_t dac = (uint32_t)((u * 4095ULL) / 65535ULL);
+        // Apply small attenuation to provide headroom (98%)
+        dac = (dac * 98U) / 100U;
+        if (dac > 4095U) dac = 4095U;
+        dst[i] = (uint16_t)dac;
+    }
 }
 
-#if AUDIO_PCM_DEMO
+#if AUDIO_PCM_DEMO && AUDIO_PROGRAM_FLASH_ON_BOOT
 static bool ProgramAudioPcmToFlash(void)
 {
     uint32_t total = audio_pcm_len_bytes;
@@ -329,6 +406,58 @@ void StartDMA(){
     DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
     DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
     DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+}
+
+static uint32_t AudioRingFree(void)
+{
+    uint32_t r = gAudioRingRead;
+    uint32_t w = gAudioRingWrite;
+    if (w >= r)
+    {
+        return (AUDIO_RING_SAMPLES - (w - r) - 1U);
+    }
+    return (r - w - 1U);
+}
+
+static void AudioRingPushChunk(const uint16_t *src, uint32_t count)
+{
+    uint32_t w = gAudioRingWrite;
+    for (uint32_t i = 0; i < count; i++)
+    {
+        uint32_t next = (w + 1U) % AUDIO_RING_SAMPLES;
+        if (next == gAudioRingRead)
+        {
+            break;
+        }
+        gAudioRing[w] = src[i];
+        w = next;
+    }
+    gAudioRingWrite = w;
+}
+
+static void FillAudioRingFromFlash(void)
+{
+    while (AudioRingFree() >= ((AUDIO_CHUNK_BYTES / 2U) + 1U))
+    {
+        LoadNextAudioChunk(buffer1);
+        AudioRingPushChunk(buffer1, (AUDIO_CHUNK_BYTES / 2U));
+    }
+}
+
+void SysTick_Handler(void)
+{
+    uint16_t sample = 2048U;
+    uint32_t r = gAudioRingRead;
+    if (r != gAudioRingWrite)
+    {
+        sample = gAudioRing[r];
+        gAudioRingRead = (r + 1U) % AUDIO_RING_SAMPLES;
+    }
+    else
+    {
+        gAudioUnderflow = true;
+    }
+    DAC0->DATA0 = sample;
 }
 
 
@@ -422,11 +551,35 @@ void FillBuffer(){
     }
 }
 
+#if MCU_RELEASE_FLASH_BUS
+static void ReleaseFlashBusForExternalProgrammer(void)
+{
+    // Put flash bus pins in Hi-Z so external programmer can drive the bus.
+    DL_GPIO_initDigitalInputFeatures(COMs_CS_Flash_IOMUX,
+        DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+        DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+    DL_GPIO_initDigitalInputFeatures(COMs_SCLK_Flash_IOMUX,
+        DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+        DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+    DL_GPIO_initDigitalInputFeatures(COMs_PICO_Flash_IOMUX,
+        DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+        DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+    DL_GPIO_initDigitalInputFeatures(COMs_POCI_Flash_IOMUX,
+        DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
+        DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+
+    DL_GPIO_disableOutput(COMs_CS_Flash_PORT, COMs_CS_Flash_PIN);
+    DL_GPIO_disableOutput(COMs_SCLK_Flash_PORT, COMs_SCLK_Flash_PIN);
+    DL_GPIO_disableOutput(COMs_PICO_Flash_PORT, COMs_PICO_Flash_PIN);
+    DL_GPIO_disableOutput(COMs_POCI_Flash_PORT, COMs_POCI_Flash_PIN);
+}
+#endif
+
 int main(void) {
     SYSCFG_DL_init();
     //SPI_Flash_SetBitrate10kHz();
     //SPIF_Init(Handle);
-    uint32_t current_state;
+#if !AUDIO_PCM_DEMO
     __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
     __NVIC_EnableIRQ(DAC12_INT_IRQN);
     __NVIC_ClearPendingIRQ(TIMER_KEYs_INST_INT_IRQN);
@@ -438,7 +591,16 @@ int main(void) {
     DL_Timer_startCounter(TIMER_KEYs_INST);
     DL_Timer_startCounter(TIMER_LEDs_INST);
     DL_Timer_startCounter(TIMER_PROG_INST);
+#endif
     OLED_Init();
+#if MCU_RELEASE_FLASH_BUS
+    ReleaseFlashBusForExternalProgrammer();
+    OLED_Clear();
+    OLED_ShowString(1, 1, "FLASH BUS");
+    OLED_ShowString(2, 1, "RELEASED");
+    while (1) {
+    }
+#endif
 #if SPIF_TEST
     SPIF_Test();
     while (1) {
@@ -448,6 +610,7 @@ int main(void) {
     Dac_SineTest();
 #endif
 #if AUDIO_PCM_DEMO
+#if AUDIO_PROGRAM_FLASH_ON_BOOT
     if (ProgramAudioPcmToFlash() == false)
     {
         OLED_Clear();
@@ -456,14 +619,64 @@ int main(void) {
         while (1) {
         }
     }
+#endif
+    if (SPIF_Init(Handle) == false)
+    {
+        OLED_Clear();
+        OLED_ShowString(1, 1, "SPIF INIT");
+        OLED_ShowString(2, 1, "FAIL");
+        while (1) {
+        }
+    }
+
+#if AUDIO_PROGRAM_FLASH_ON_BOOT
     gAudioChunkCount = (audio_pcm_len_bytes + AUDIO_CHUNK_BYTES - 1U) / AUDIO_CHUNK_BYTES;
+#else
+    gAudioChunkCount = (AUDIO_EXTERNAL_FLASH_BYTES + AUDIO_CHUNK_BYTES - 1U) / AUDIO_CHUNK_BYTES;
+#endif
     play_prog1 = 0;
     buffer_state = IDLE_BUF2;
+#if AUDIO_USE_DMA
     StartDMA();
     while (1)
     {
         FillBuffer();
     }
+#else
+    OLED_Clear();
+    OLED_ShowString(1, 1, "AUDIO PLAY");
+    OLED_ShowString(2, 1, "BOOT TONE");
+    DL_DAC12_disableFIFO(DAC0);
+    DacBootToneTest();
+    OLED_ShowString(2, 1, "PLAY PCM ");
+    DL_Timer_stopCounter(TIMER_KEYs_INST);
+    DL_Timer_stopCounter(TIMER_LEDs_INST);
+    DL_Timer_stopCounter(TIMER_PROG_INST);
+    gAudioRingRead = 0;
+    gAudioRingWrite = 0;
+    gAudioUnderflow = false;
+    FillAudioRingFromFlash();
+    if (SysTick_Config(CPUCLK_FREQ / AUDIO_SAMPLE_RATE_HZ) != 0U)
+    {
+        OLED_ShowString(3, 1, "SYSTICK FAIL");
+        while (1) {
+        }
+    }
+    while (1)
+    {
+        FillAudioRingFromFlash();
+        if (gSpifReadFail)
+        {
+            OLED_ShowString(2, 1, "SPIF READ FAIL");
+            gSpifReadFail = false;
+        }
+        if (gAudioUnderflow)
+        {
+            OLED_ShowString(3, 1, "AUDIO UNDERFLOW");
+            gAudioUnderflow = false;
+        }
+    }
+#endif
 #endif
     OLED_ShowCoverIMG();
     delay_cycles(50000000);

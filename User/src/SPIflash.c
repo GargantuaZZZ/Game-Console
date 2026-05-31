@@ -18,9 +18,13 @@
 
 #define SPIF_DUMMY_BYTE 0xA5
 
-/* Soft SPI timing control (lower = faster) */
-#define SPIF_SOFTSPI_DELAY_CYCLES 8U
+/* Soft SPI timing control (lower = faster). */
+#define SPIF_SOFTSPI_DELAY_CYCLES 0U
+#if SPIF_SOFTSPI_DELAY_CYCLES > 0U
 #define SPIF_SOFTSPI_DELAY()      DL_Common_delayCycles(SPIF_SOFTSPI_DELAY_CYCLES)
+#else
+#define SPIF_SOFTSPI_DELAY()      ((void)0)
+#endif
 
 #define SPIF_CMD_READSFDP 0x5A
 #define SPIF_CMD_ID 0x90
