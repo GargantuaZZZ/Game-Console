@@ -31,8 +31,8 @@
 #define AUDIO_PCM_FLASH_ADDR 0x00000000U
 #define SPIF_TEST_DELAY_CYCLES 20000000U
 
-#define KEY_PRESSED     false
-#define KEY_RELEASED    true
+#define KEY_PRESSED     true
+#define KEY_RELEASED    false
 #define STABLE_CNT      10
 #define AUDIO_CHUNK_BYTES 1024U
 #define WELCOME_DURATION_TICKS 12U
