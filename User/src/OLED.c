@@ -2,10 +2,13 @@
 #include "inc/OLED_Font.h"
 
 /*引脚配置*/
-#define OLED_W_SCL_H		DL_GPIO_setPins(COMs_PORT, COMs_SCL_Screen_PIN)
-#define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_PORT, COMs_SCL_Screen_PIN)
-#define OLED_W_SDA_H		DL_GPIO_setPins(COMs_PORT, COMs_SDA_Screen_PIN)
-#define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_PORT, COMs_SDA_Screen_PIN)
+#define OLED_W_SCL_H		DL_GPIO_setPins(COMs_SCL_Screen_PORT, COMs_SCL_Screen_PIN)
+#define OLED_W_SCL_L		DL_GPIO_clearPins(COMs_SCL_Screen_PORT, COMs_SCL_Screen_PIN)
+#define OLED_W_SDA_H		DL_GPIO_setPins(COMs_SDA_Screen_PORT, COMs_SDA_Screen_PIN)
+#define OLED_W_SDA_L		DL_GPIO_clearPins(COMs_SDA_Screen_PORT, COMs_SDA_Screen_PIN)
+/*软I2C时序延时（调低速率）*/
+#define OLED_I2C_DELAY_CYCLES	(16U)
+#define OLED_I2C_DELAY()		DL_Common_delayCycles(OLED_I2C_DELAY_CYCLES)
 ;
 /*引脚初始化*/
 void OLED_I2C_Init(void)
@@ -22,9 +25,13 @@ void OLED_I2C_Init(void)
 void OLED_I2C_Start(void)
 {
 	OLED_W_SDA_H;
+	OLED_I2C_DELAY();
 	OLED_W_SCL_H;
+	OLED_I2C_DELAY();
 	OLED_W_SDA_L;
+	OLED_I2C_DELAY();
 	OLED_W_SCL_L;
+	OLED_I2C_DELAY();
 }
 
 /**
@@ -35,8 +42,11 @@ void OLED_I2C_Start(void)
 void OLED_I2C_Stop(void)
 {
 	OLED_W_SDA_L;
+	OLED_I2C_DELAY();
 	OLED_W_SCL_H;
+	OLED_I2C_DELAY();
 	OLED_W_SDA_H;
+	OLED_I2C_DELAY();
 }
 
 /**
@@ -53,11 +63,16 @@ void OLED_I2C_SendByte(uint8_t Byte)
 			OLED_W_SDA_H;
 		else
 			OLED_W_SDA_L;
+		OLED_I2C_DELAY();
 		OLED_W_SCL_H;
+		OLED_I2C_DELAY();
 		OLED_W_SCL_L;
+		OLED_I2C_DELAY();
 	}
 	OLED_W_SCL_H;	//额外的一个时钟，不处理应答信号
+	OLED_I2C_DELAY();
 	OLED_W_SCL_L;
+	OLED_I2C_DELAY();
 }
 
 /**
@@ -90,7 +105,7 @@ void OLED_WriteData(uint8_t Data)
 
 /**
   * @brief  OLED设置光标位置
-  * @param  Y 以左上角为原点，向下方向的坐标，范围：0~7
+ * @param  Y 以左上角为原点，向下方向的坐标，范围：0~3
   * @param  X 以左上角为原点，向右方向的坐标，范围：0~127
   * @retval 无
   */
@@ -109,7 +124,7 @@ void OLED_SetCursor(uint8_t Y, uint8_t X)
 void OLED_Clear(void)
 {  
 	uint8_t i, j;
-	for (j = 0; j < 8; j++)
+	for (j = 0; j < 4; j++)
 	{
 		OLED_SetCursor(j, 0);
 		for(i = 0; i < 128; i++)
@@ -121,7 +136,7 @@ void OLED_Clear(void)
 
 /**
   * @brief  OLED显示一个字符
-  * @param  Line 行位置，范围：1~4
+ * @param  Line 行位置，范围：1~2
   * @param  Column 列位置，范围：1~16
   * @param  Char 要显示的一个字符，范围：ASCII可见字符
   * @retval 无
@@ -143,7 +158,7 @@ void OLED_ShowChar(uint8_t Line, uint8_t Column, char Char)
 
 /**
   * @brief  OLED显示字符串
-  * @param  Line 起始行位置，范围：1~4
+ * @param  Line 起始行位置，范围：1~2
   * @param  Column 起始列位置，范围：1~16
   * @param  String 要显示的字符串，范围：ASCII可见字符
   * @retval 无
@@ -173,7 +188,7 @@ uint32_t OLED_Pow(uint32_t X, uint32_t Y)
 
 /**
   * @brief  OLED显示数字（十进制，正数）
-  * @param  Line 起始行位置，范围：1~4
+ * @param  Line 起始行位置，范围：1~2
   * @param  Column 起始列位置，范围：1~16
   * @param  Number 要显示的数字，范围：0~4294967295
   * @param  Length 要显示数字的长度，范围：1~10
@@ -190,7 +205,7 @@ void OLED_ShowNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Length)
 
 /**
   * @brief  OLED显示数字（十进制，带符号数）
-  * @param  Line 起始行位置，范围：1~4
+ * @param  Line 起始行位置，范围：1~2
   * @param  Column 起始列位置，范围：1~16
   * @param  Number 要显示的数字，范围：-2147483648~2147483647
   * @param  Length 要显示数字的长度，范围：1~10
@@ -218,7 +233,7 @@ void OLED_ShowSignedNum(uint8_t Line, uint8_t Column, int32_t Number, uint8_t Le
 
 /**
   * @brief  OLED显示数字（十六进制，正数）
-  * @param  Line 起始行位置，范围：1~4
+ * @param  Line 起始行位置，范围：1~2
   * @param  Column 起始列位置，范围：1~16
   * @param  Number 要显示的数字，范围：0~0xFFFFFFFF
   * @param  Length 要显示数字的长度，范围：1~8
@@ -243,7 +258,7 @@ void OLED_ShowHexNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 
 /**
   * @brief  OLED显示数字（二进制，正数）
-  * @param  Line 起始行位置，范围：1~4
+ * @param  Line 起始行位置，范围：1~2
   * @param  Column 起始列位置，范围：1~16
   * @param  Number 要显示的数字，范围：0~1111 1111 1111 1111
   * @param  Length 要显示数字的长度，范围：1~16
@@ -260,7 +275,7 @@ void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 
 /**
   * @brief  OLED显示中文
-  * @param  Line 起始行位置，范围：1～4
+ * @param  Line 起始行位置，范围：1～2
   * @param  Column 起始列位置，范围：1～8
   * @param  ID 文字在字库中的序号
   * @retval 无
@@ -286,11 +301,13 @@ void OLED_ShowChinese(uint8_t Line, uint8_t Column, uint8_t ID){
 */
 void OLED_ShowCoverIMG(void){
 	OLED_SetCursor(0, 0);
-	for (uint8_t row = 0; row < 4; row++)
+	for (uint8_t row = 0; row < 4; row++){
+		OLED_SetCursor(row, 0);
 		for (uint8_t col = 0; col < 128; col++){
 			OLED_WriteData(COVER_IMG[row][col]);
 			DL_Common_delayCycles(64000);
 		}
+	}
 }
 
 /**
@@ -315,7 +332,7 @@ void OLED_Init(void)
 	OLED_WriteCommand(0x80);
 	
 	OLED_WriteCommand(0xA8);	//设置多路复用率
-	OLED_WriteCommand(0x3F);
+	OLED_WriteCommand(0x1F);
 	
 	OLED_WriteCommand(0xD3);	//设置显示偏移
 	OLED_WriteCommand(0x00);
@@ -327,7 +344,7 @@ void OLED_Init(void)
 	OLED_WriteCommand(0xC8);	//设置上下方向，0xC8正常 0xC0上下反置
 
 	OLED_WriteCommand(0xDA);	//设置COM引脚硬件配置
-	OLED_WriteCommand(0x12);
+	OLED_WriteCommand(0x02);
 	
 	OLED_WriteCommand(0x81);	//设置对比度控制
 	OLED_WriteCommand(0xCF);

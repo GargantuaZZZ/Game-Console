@@ -40,11 +40,10 @@ extern int  main( void );
 
 #if defined(__ARMCC_VERSION)
 extern void __main(void);
-extern uint32_t Image$$RW_IRAM2$$ZI$$Limit;
-#define APP_STACK_TOP Image$$RW_IRAM2$$ZI$$Limit
+#define APP_STACK_TOP_ADDR ((uint32_t)0x20208000u)
 #else
 extern uint32_t __StackTop;
-#define APP_STACK_TOP __StackTop
+#define APP_STACK_TOP_ADDR ((uint32_t)&__StackTop)
 #endif
 
 extern uint32_t __data_load__;
@@ -104,7 +103,7 @@ extern void DMA_IRQHandler      (void) __attribute__((weak, alias("Default_Handl
 /* the program if located at a start address other than 0.                            */
 void (* const interruptVectors[])(void) __attribute__ ((used)) __attribute__ ((section (".intvecs"))) =
 {
-    (pFunc)&APP_STACK_TOP,                 /* The initial stack pointer */
+    (pFunc)APP_STACK_TOP_ADDR,             /* The initial stack pointer */
     Reset_Handler,                         /* The reset handler         */
     NMI_Handler,                           /* The NMI handler           */
     HardFault_Handler,                     /* The hard fault handler    */

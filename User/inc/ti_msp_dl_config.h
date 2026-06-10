@@ -114,25 +114,6 @@ extern "C" {
 
 
 
-/* Defines for SPI_Flash */
-#define SPI_Flash_INST                                                     SPI1
-#define SPI_Flash_INST_IRQHandler                               SPI1_IRQHandler
-#define SPI_Flash_INST_INT_IRQN                                   SPI1_INT_IRQn
-#define GPIO_SPI_Flash_PICO_PORT                                          GPIOB
-#define GPIO_SPI_Flash_PICO_PIN                                   DL_GPIO_PIN_8
-#define GPIO_SPI_Flash_IOMUX_PICO                               (IOMUX_PINCM25)
-#define GPIO_SPI_Flash_IOMUX_PICO_FUNC               IOMUX_PINCM25_PF_SPI1_PICO
-#define GPIO_SPI_Flash_POCI_PORT                                          GPIOB
-#define GPIO_SPI_Flash_POCI_PIN                                   DL_GPIO_PIN_7
-#define GPIO_SPI_Flash_IOMUX_POCI                               (IOMUX_PINCM24)
-#define GPIO_SPI_Flash_IOMUX_POCI_FUNC               IOMUX_PINCM24_PF_SPI1_POCI
-/* GPIO configuration for SPI_Flash */
-#define GPIO_SPI_Flash_SCLK_PORT                                          GPIOB
-#define GPIO_SPI_Flash_SCLK_PIN                                   DL_GPIO_PIN_9
-#define GPIO_SPI_Flash_IOMUX_SCLK                               (IOMUX_PINCM26)
-#define GPIO_SPI_Flash_IOMUX_SCLK_FUNC               IOMUX_PINCM26_PF_SPI1_SCLK
-
-
 
 /* Defines for DMA_CH0 */
 #define DMA_CH0_CHAN_ID                                                      (0)
@@ -196,18 +177,30 @@ extern "C" {
 #define KEYs_KEY7_PORT                                                   (GPIOA)
 #define KEYs_KEY7_PIN                                           (DL_GPIO_PIN_26)
 #define KEYs_KEY7_IOMUX                                          (IOMUX_PINCM59)
-/* Port definition for Pin Group COMs */
-#define COMs_PORT                                                        (GPIOB)
-
 /* Defines for CS_Flash: GPIOB.10 with pinCMx 27 on package pin 62 */
+#define COMs_CS_Flash_PORT                                               (GPIOB)
 #define COMs_CS_Flash_PIN                                       (DL_GPIO_PIN_10)
 #define COMs_CS_Flash_IOMUX                                      (IOMUX_PINCM27)
-/* Defines for SCL_Screen: GPIOB.12 with pinCMx 29 on package pin 64 */
-#define COMs_SCL_Screen_PIN                                     (DL_GPIO_PIN_12)
-#define COMs_SCL_Screen_IOMUX                                    (IOMUX_PINCM29)
-/* Defines for SDA_Screen: GPIOB.11 with pinCMx 28 on package pin 63 */
-#define COMs_SDA_Screen_PIN                                     (DL_GPIO_PIN_11)
-#define COMs_SDA_Screen_IOMUX                                    (IOMUX_PINCM28)
+/* Defines for SCL_Screen: GPIOA.17 with pinCMx 39 on package pin 10 */
+#define COMs_SCL_Screen_PORT                                             (GPIOA)
+#define COMs_SCL_Screen_PIN                                     (DL_GPIO_PIN_17)
+#define COMs_SCL_Screen_IOMUX                                    (IOMUX_PINCM39)
+/* Defines for SDA_Screen: GPIOA.16 with pinCMx 38 on package pin 9 */
+#define COMs_SDA_Screen_PORT                                             (GPIOA)
+#define COMs_SDA_Screen_PIN                                     (DL_GPIO_PIN_16)
+#define COMs_SDA_Screen_IOMUX                                    (IOMUX_PINCM38)
+/* Defines for SCLK_Flash: GPIOB.9 with pinCMx 26 on package pin 61 */
+#define COMs_SCLK_Flash_PORT                                             (GPIOB)
+#define COMs_SCLK_Flash_PIN                                      (DL_GPIO_PIN_9)
+#define COMs_SCLK_Flash_IOMUX                                    (IOMUX_PINCM26)
+/* Defines for POCI_Flash: GPIOB.7 with pinCMx 24 on package pin 59 */
+#define COMs_POCI_Flash_PORT                                             (GPIOB)
+#define COMs_POCI_Flash_PIN                                      (DL_GPIO_PIN_7)
+#define COMs_POCI_Flash_IOMUX                                    (IOMUX_PINCM24)
+/* Defines for PICO_Flash: GPIOB.8 with pinCMx 25 on package pin 60 */
+#define COMs_PICO_Flash_PORT                                             (GPIOB)
+#define COMs_PICO_Flash_PIN                                      (DL_GPIO_PIN_8)
+#define COMs_PICO_Flash_IOMUX                                    (IOMUX_PINCM25)
 
 
 
@@ -229,7 +222,6 @@ void SYSCFG_DL_TIMER_KEYs_init(void);
 void SYSCFG_DL_TIMER_LEDs_init(void);
 void SYSCFG_DL_TIMER_PROG_init(void);
 void SYSCFG_DL_UART_Debug_init(void);
-void SYSCFG_DL_SPI_Flash_init(void);
 void SYSCFG_DL_DMA_init(void);
 
 void SYSCFG_DL_DAC12_init(void);
