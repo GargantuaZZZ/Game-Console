@@ -4,12 +4,12 @@
 #include "inc/Alerts.h"
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 #define SPIF_DEBUG SPIF_DEBUG_FULL
 
 #define SPIF_TEST 0
-#define AUDIO_PCM_DEMO 1
+#define GAME_DEMO 1
+#define AUDIO_PCM_DEMO 0
 #define DAC_SINE_TEST 0
 // Set to 1 when using CH341 to program external SPI flash in-circuit.
 #define MCU_RELEASE_FLASH_BUS 0
@@ -35,23 +35,32 @@
 #define KEY_RELEASED    true
 #define STABLE_CNT      10
 #define AUDIO_CHUNK_BYTES 1024U
+#define WELCOME_DURATION_TICKS 12U
+#define GAME_DURATION_TICKS 240U
+#define PROGRESS_PAGE 3U
+#define PROGRESS_X 0U
+#define PROGRESS_WIDTH 32U
+#define PROGRESS_INNER_WIDTH (PROGRESS_WIDTH - 2U)
+#define RESULT_FLASH_CHUNKS 8U
 
-#define WELCOME_ADDR    0x00
-#define WELCOME_LEN     320
-#define DIFF_ADDR0      0x10
-#define DIFF_LEN        32
-#define START_ADDR      0x20
-#define START_LEN       64
-#define LEVEL_ADDR0     0x30
-#define LEVEL_LEN       64
-#define BGM_ADDR        0x40
-#define BGM_LEN         3200
-#define WIN_ADDR        0x50
-#define WIN_LEN         32
-#define LOSE_ADDR       0x60
-#define LOSE_LEN        32
-#define WIN_ALL_ADDR    0x70
-#define WIN_ALL_LEN     64
+#define WELCOME_ADDR    0x000
+#define WELCOME_LEN     48
+#define DIFF_ADDR0      0x030
+#define DIFF_LEN        16
+#define START_ADDR      0x0A0
+#define START_LEN       47
+#define LEVEL_ADDR0     0x0CF
+#define LEVEL_LEN       47
+#define BGM_ADDR0       0x15C
+#define BGM_LEN         938
+#define WIN_ADDR        0xC5A
+#define WIN_LEN         47
+#define LOSE_ADDR       0xC89
+#define LOSE_LEN        47
+#define WIN_ALL_ADDR    0xCB8
+#define WIN_ALL_LEN     47
+#define HIDDEN_WIN_ADDR 0xCE7
+#define HIDDEN_WIN_LEN  47
 
 enum{
     WELCOME,
@@ -59,7 +68,8 @@ enum{
     LEVEL_SEL,
     LEVEL_SEL_BUSY,
     PLAYING,
-    GAME_OVER
+    GAME_OVER,
+    GAME_FINISHED
 }game_state;
 
 enum{
@@ -76,10 +86,13 @@ enum{
     CONFIRMED
 }diff_sel_state;
 
-enum{
+typedef enum {
     HIT,
-    MISS
-}key_result;
+    MISS,
+    NO_HIT
+} KeyResult;
+
+volatile KeyResult key_result;
 
 GPIO_Regs* LEDs_PORT[7] = {LEDs_LED1_PORT, LEDs_LED2_PORT, LEDs_LED3_PORT, LEDs_LED4_PORT, LEDs_LED5_PORT, LEDs_LED6_PORT, LEDs_LED7_PORT};
 const uint32_t LEDs_PIN[7] = {LEDs_LED1_PIN, LEDs_LED2_PIN, LEDs_LED3_PIN, LEDs_LED4_PIN, LEDs_LED5_PIN, LEDs_LED6_PIN, LEDs_LED7_PIN};
@@ -91,12 +104,26 @@ const uint16_t TARGET_SCORE[7][3] = {{20, 50, 90}, {40, 100, 160}, {50, 150, 240
 
 bool        key_state[7];
 volatile bool is_key_triggered[7];
+volatile bool key_was_target[7];
+volatile uint8_t key_target_round[7];
 volatile bool is_LED_active;
 uint8_t     key_stable_cnt[7];
 uint8_t     difficulty,level;
 volatile uint8_t target1,target2,game_prog;
 uint16_t    buffer1[512],buffer2[512];
-uint16_t    play_prog1,play_prog2,score;
+uint16_t    play_prog1;
+volatile uint16_t score;
+volatile uint16_t play_prog2;
+static volatile uint32_t gRandomSeed;
+static uint8_t gGameProgressDrawn;
+static volatile bool gRoundActive;
+static volatile bool gScoreDirty;
+static volatile uint8_t gTargetRound;
+static volatile uint8_t gTargetMask;
+static volatile uint8_t gHitMask;
+static uint8_t gWelcomeLedStep;
+static uint8_t gWelcomeLastTick;
+static uint8_t gConfirmLastTick;
 
 static SPIF_HandleTypeDef gSpifHandle;
 SPIF_HandleTypeDef *Handle = &gSpifHandle;
@@ -106,6 +133,8 @@ static volatile bool gAudioUnderflow = false;
 static volatile uint16_t gAudioRing[AUDIO_RING_SAMPLES];
 static volatile uint32_t gAudioRingRead = 0;
 static volatile uint32_t gAudioRingWrite = 0;
+
+void FillBuffer(void);
 
 static void DacBootToneTest(void)
 {
@@ -402,10 +431,264 @@ static bool ProgramAudioPcmToFlash(void)
 void StartDMA(){
     LoadNextAudioChunk(buffer1);
     LoadNextAudioChunk(buffer2);
+    buffer_state = IDLE_BUF2;
     DL_DMA_setSrcAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&buffer1[0]);
     DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&(DAC0 -> DATA0));
     DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
     DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+}
+
+static void ClearAllLEDs(void)
+{
+    for (uint8_t i = 0; i < 7; i++)
+    {
+        DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+    }
+    target1 = 8;
+    target2 = 8;
+    is_LED_active = false;
+}
+
+static void ShowOnlyLED(uint8_t led)
+{
+    for (uint8_t i = 0; i < 7; i++)
+    {
+        if (i == led)
+        {
+            DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+        }
+        else
+        {
+            DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+        }
+    }
+}
+
+static void ClearKeyEvents(void)
+{
+    for (uint8_t i = 0; i < 7; i++)
+    {
+        is_key_triggered[i] = false;
+        key_was_target[i] = false;
+    }
+}
+
+static uint8_t NextTarget(void)
+{
+    gRandomSeed = gRandomSeed * 1664525U + 1013904223U;
+    return (uint8_t)((gRandomSeed >> 16) % 7U);
+}
+
+static uint16_t GetBgmAddr(void)
+{
+    return (uint16_t)(BGM_ADDR0 + (uint16_t)level * BGM_LEN);
+}
+
+static uint8_t CountSetBits(uint8_t value)
+{
+    uint8_t count = 0;
+    while (value != 0U)
+    {
+        count += value & 1U;
+        value >>= 1U;
+    }
+    return count;
+}
+
+static void SpawnTargets(void)
+{
+    if (game_state == PLAYING && gRoundActive)
+    {
+        uint8_t remaining_targets =
+            CountSetBits(gTargetMask & (uint8_t)~gHitMask);
+        if (remaining_targets > 0U)
+        {
+            key_result = NO_HIT;
+            play_prog2 = 1;
+            if (score >= remaining_targets)
+            {
+                score -= remaining_targets;
+            }
+            else
+            {
+                score = 0;
+            }
+            gScoreDirty = true;
+        }
+    }
+
+    ClearAllLEDs();
+    gTargetRound++;
+    gRoundActive = true;
+    gHitMask = 0;
+    target1 = NextTarget();
+    gTargetMask = (uint8_t)(1U << target1);
+    DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target1], LEDs_PIN[target1]);
+    if (difficulty >= 4)
+    {
+        do
+        {
+            target2 = NextTarget();
+        } while (target2 == target1);
+        gTargetMask |= (uint8_t)(1U << target2);
+        DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target2], LEDs_PIN[target2]);
+    }
+    is_LED_active = true;
+}
+
+static void ShowDifficultyScreen(void)
+{
+    ClearAllLEDs();
+    OLED_Clear();
+    OLED_ShowChinese(1, 2, 0);
+    OLED_ShowChinese(1, 4, 1);
+    for (uint8_t i = 0; i < 7; i++)
+    {
+        OLED_ShowChinese(2, i + 1, i + 4);
+    }
+}
+
+static void ProcessGameKeys(void)
+{
+    for (uint8_t i = 0; i < 7; i++)
+    {
+        if (!is_key_triggered[i])
+        {
+            continue;
+        }
+
+        is_key_triggered[i] = false;
+        uint8_t event_round = key_target_round[i];
+        bool belongs_to_target = key_was_target[i];
+        key_was_target[i] = false;
+
+        if (belongs_to_target)
+        {
+            key_result = HIT;
+            score += 3;
+            if (event_round == gTargetRound && gRoundActive)
+            {
+                uint8_t key_bit = (uint8_t)(1U << i);
+                gHitMask |= key_bit;
+                DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
+                if (i == target1)
+                {
+                    target1 = 8;
+                }
+                if (i == target2)
+                {
+                    target2 = 8;
+                }
+                if ((gHitMask & gTargetMask) == gTargetMask)
+                {
+                    gRoundActive = false;
+                    is_LED_active = false;
+                }
+            }
+        }
+        else
+        {
+            key_result = MISS;
+            if (score > 0)
+            {
+                score--;
+            }
+        }
+        play_prog2 = 1;
+        gScoreDirty = true;
+    }
+}
+
+static void ResetProgressBar(void)
+{
+    OLED_SetCursor(PROGRESS_PAGE, PROGRESS_X);
+    OLED_WriteData(0xFF);
+    for (uint8_t i = 0; i < PROGRESS_INNER_WIDTH; i++)
+    {
+        OLED_WriteData(0x81);
+    }
+    OLED_WriteData(0xFF);
+    gGameProgressDrawn = 0;
+}
+
+static void UpdateProgressBar(void)
+{
+    uint8_t progress = (uint8_t)(((uint32_t)game_prog *
+        PROGRESS_INNER_WIDTH) / GAME_DURATION_TICKS);
+
+    if (progress > PROGRESS_INNER_WIDTH)
+    {
+        progress = PROGRESS_INNER_WIDTH;
+    }
+    if (progress <= gGameProgressDrawn)
+    {
+        return;
+    }
+
+    OLED_SetCursor(PROGRESS_PAGE,
+        PROGRESS_X + 1U + gGameProgressDrawn);
+    while (gGameProgressDrawn < progress)
+    {
+        OLED_WriteData(0xFF);
+        gGameProgressDrawn++;
+    }
+}
+
+static void ShowResultBanner(char *text, bool visible)
+{
+    OLED_ShowString(2, 1, visible ? text : "      ");
+}
+
+static void PlayResultAudio(
+    uint16_t address, uint16_t length, char *banner)
+{
+    uint8_t last_flash_phase = 0xFFU;
+
+    play_prog1 = address;
+    StartDMA();
+    while (play_prog1 < address + length)
+    {
+        uint8_t flash_phase =
+            (uint8_t)((play_prog1 - address) / RESULT_FLASH_CHUNKS);
+        if (flash_phase != last_flash_phase)
+        {
+            ShowResultBanner(banner, (flash_phase & 1U) == 0U);
+            last_flash_phase = flash_phase;
+        }
+        FillBuffer();
+    }
+    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+    ShowResultBanner(banner, true);
+}
+
+static void UpdateWelcomeLEDs(void)
+{
+    uint8_t tick = game_prog;
+    if (tick == gWelcomeLastTick)
+    {
+        return;
+    }
+    gWelcomeLastTick = tick;
+    ShowOnlyLED(gWelcomeLedStep);
+    gWelcomeLedStep = (uint8_t)((gWelcomeLedStep + 1U) % 7U);
+}
+
+static void UpdateConfirmLED(void)
+{
+    uint8_t tick = game_prog;
+    if (tick == gConfirmLastTick)
+    {
+        return;
+    }
+    gConfirmLastTick = tick;
+    if ((tick & 1U) == 0U)
+    {
+        ShowOnlyLED(difficulty);
+    }
+    else
+    {
+        ClearAllLEDs();
+    }
 }
 
 static uint32_t AudioRingFree(void)
@@ -462,6 +745,47 @@ void SysTick_Handler(void)
 
 
 
+static void MixAlert(uint16_t *buffer)
+{
+    const uint16_t *samples;
+    uint16_t sample_count;
+    uint16_t total_samples;
+
+    if (play_prog2 == 0)
+    {
+        return;
+    }
+
+    if (key_result == HIT)
+    {
+        samples = alert_hit;
+        sample_count = ALERT_LEN;
+        total_samples = ALERT_LEN;
+    }
+    else if (key_result == MISS)
+    {
+        samples = alert_miss;
+        sample_count = ALERT_LEN;
+        total_samples = ALERT_LEN * 3U;
+    }
+    else
+    {
+        samples = alert_timeout;
+        sample_count = ALERT_TIMEOUT_LEN;
+        total_samples = ALERT_TIMEOUT_LEN * 8U;
+    }
+
+    for (uint16_t i = 0; i < 512 && play_prog2 <= total_samples; i++)
+    {
+        buffer[i] = samples[(play_prog2 - 1U) % sample_count];
+        play_prog2++;
+    }
+    if (play_prog2 > total_samples)
+    {
+        play_prog2 = 0;
+    }
+}
+
 void FillBuffer(){
     if (buffer_state == FILL_BUF1){
         DL_DMA_setSrcAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t)&buffer2[0]);
@@ -469,41 +793,7 @@ void FillBuffer(){
         DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
         DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
         LoadNextAudioChunk(buffer1);
-        for (uint8_t i = 0; i < 7; i++){
-            if ((i == target1 || i == target2) && is_key_triggered[i]){
-                play_prog2 = 1;
-                key_result = HIT;
-                is_key_triggered[i] = false;
-                DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-                if (i == target1)
-                    target1 = 8;
-                else
-                    target2 = 8;
-                score += 3;
-                OLED_ShowNum(3, 10, score, 3);
-            }
-            if (i != target1 && i != target2 && is_key_triggered[i]){
-                play_prog2 = 1;
-                key_result = MISS;
-                is_key_triggered[i] = false;
-                if (score > 0)
-                    score -= 1;
-                OLED_ShowNum(3, 10, score, 3);
-            }
-        }
-        if (play_prog2){
-            for (uint16_t i = 0; i < 512; i++){
-                if (key_result == HIT)
-                    buffer1[i] = alert_hit[play_prog2++];
-                else
-                    buffer1[i] = alert_miss[play_prog2++];
-                if (play_prog2 >= ALERT_LEN){
-                    play_prog2 = 0;
-                    break;
-                }
-            }
-            
-        }
+        MixAlert(buffer1);
         buffer_state = IDLE_BUF1;
     }
     else if (buffer_state == FILL_BUF2){
@@ -512,41 +802,7 @@ void FillBuffer(){
         DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, 512);
         DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
         LoadNextAudioChunk(buffer2);
-        for (uint8_t i = 0; i < 7; i++){
-            if ((i == target1 || i == target2) && is_key_triggered[i]){
-                play_prog2 = 1;
-                key_result = HIT;
-                is_key_triggered[i] = false;
-                DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-                if (i == target1)
-                    target1 = 8;
-                else
-                    target2 = 8;
-                score += 3;
-                OLED_ShowNum(3, 10, score, 3);
-            }
-            if (i != target1 && i != target2 && is_key_triggered[i]){
-                play_prog2 = 1;
-                key_result = MISS;
-                is_key_triggered[i] = false;
-                if (score > 0)
-                    score -= 1;
-                OLED_ShowNum(3, 10, score, 3);
-            }
-        }
-        if (play_prog2){
-            for (uint16_t i = 0; i < 512; i++){
-                if (key_result == HIT)
-                    buffer2[i] = alert_hit[play_prog2++];
-                else
-                    buffer2[i] = alert_miss[play_prog2++];
-                if (play_prog2 >= ALERT_LEN){
-                    play_prog2 = 0;
-                    break;
-                }
-            }
-            
-        }
+        MixAlert(buffer2);
         buffer_state = IDLE_BUF2;
     }
 }
@@ -575,6 +831,7 @@ static void ReleaseFlashBusForExternalProgrammer(void)
 }
 #endif
 
+#if !GAME_DEMO
 int main(void) {
     SYSCFG_DL_init();
     //SPI_Flash_SetBitrate10kHz();
@@ -694,213 +951,289 @@ int main(void) {
         delay_cycles(20000000);
     }
 }
+#endif
 
-// int main(void) {
-//     SYSCFG_DL_init();
-//     __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
-//     __NVIC_EnableIRQ(DAC12_INT_IRQN);
-//     __NVIC_ClearPendingIRQ(TIMER_KEYs_INST_INT_IRQN);
-//     __NVIC_EnableIRQ(TIMER_KEYs_INST_INT_IRQN);
-//     __NVIC_ClearPendingIRQ(TIMER_LEDs_INST_INT_IRQN);
-//     __NVIC_EnableIRQ(TIMER_LEDs_INST_INT_IRQN);
-//     __NVIC_ClearPendingIRQ(TIMER_PROG_INST_INT_IRQN);
-//     __NVIC_EnableIRQ(TIMER_PROG_INST_INT_IRQN);
-//     SPIF_Init(Handle);
+#if GAME_DEMO
+int main(void)
+{
+    SYSCFG_DL_init();
+    OLED_Init();
 
-//     for (uint8_t i = 0; i < 7; i++){
-//         key_state[i] = KEY_RELEASED;
-//         is_key_triggered[i] = false;
-//         key_stable_cnt[i] = 0;
-//     }
-//     is_LED_active = false;
-//     game_state = WELCOME;
-//     buffer_state = IDLE_BUF2;
-//     diff_sel_state = IDLE;
-//     key_result = HIT;
-//     difficulty = 0;
-//     level = 0;
-//     target1 = 8;
-//     target2 = 8;
-//     game_prog = 0;
-//     play_prog1 = WELCOME_ADDR;
-//     play_prog2 = 0;
-//     StartDMA();
-//     OLED_ShowCoverIMG();
+    __NVIC_ClearPendingIRQ(DAC12_INT_IRQN);
+    __NVIC_EnableIRQ(DAC12_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_KEYs_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_KEYs_INST_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_LEDs_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_LEDs_INST_INT_IRQN);
+    __NVIC_ClearPendingIRQ(TIMER_PROG_INST_INT_IRQN);
+    __NVIC_EnableIRQ(TIMER_PROG_INST_INT_IRQN);
 
-//     while (1) {
-//         switch (game_state){
-//             //欢迎界面
-//             case WELCOME:
-//                 while (play_prog1 < WELCOME_ADDR + WELCOME_LEN)
-//                     FillBuffer();
-//                 DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                 DL_Timer_startCounter(TIMER_KEYs_INST);
-//                 OLED_Clear();
-//                 OLED_ShowChinese(2, 2, 0);
-//                 OLED_ShowChinese(2, 4, 1);
-//                 for (uint8_t i = 0; i < 7; i++)
-//                     OLED_ShowChinese(4, i + 2, i + 4);
-//                 game_state = DIFF_SEL;
-//             break;
+    if (!SPIF_Init(Handle))
+    {
+        OLED_ShowString(1, 1, "SPIF INIT FAIL");
+        while (1) {
+        }
+    }
 
-//             //难度选择
-//             case DIFF_SEL:
-//                 if (diff_sel_state == BUSY){
-//                     while (play_prog1 < DIFF_ADDR0 + (difficulty + 1) * DIFF_LEN)
-//                         FillBuffer();
-//                     DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                     DL_Timer_startCounter(TIMER_KEYs_INST);
-//                     diff_sel_state = SELECTED;
-//                 }
-//                 else if (diff_sel_state == CONFIRMED){
-//                     while (play_prog1 < START_ADDR + START_LEN)
-//                         FillBuffer();
-//                     DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                     DL_Timer_setLoadValue(TIMER_LEDs_INST, SPEED[difficulty]);
-//                     level = 0;
-//                     score = 0;
-//                     diff_sel_state = IDLE;
-//                     game_state = LEVEL_SEL;
-//                 }
-//                 else {
-//                     for (uint8_t i = 0; i < 7; i++){
-//                         if (is_key_triggered[i]){
-//                             is_key_triggered[i] = false;
-//                             if (diff_sel_state == IDLE){
-//                                 play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
-//                                 difficulty = i;
-//                                 DL_Timer_stopCounter(TIMER_KEYs_INST);
-//                                 OLED_ShowNum(1, 10, i + 1, 1);
-//                                 diff_sel_state = BUSY;
-//                                 StartDMA();
-//                             }
-//                             else if (diff_sel_state == SELECTED){
-//                                 if (i == difficulty){
-//                                     play_prog1 = START_ADDR;
-//                                     DL_Timer_stopCounter(TIMER_KEYs_INST);
-//                                     diff_sel_state = CONFIRMED;
-//                                     StartDMA();
-//                                 }
-//                                 else{
-//                                     play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
-//                                     difficulty = i;
-//                                     DL_Timer_stopCounter(TIMER_KEYs_INST);
-//                                     OLED_ShowNum(1, 10, i + 1, 1);
-//                                     diff_sel_state = BUSY;
-//                                     StartDMA();
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             break;
+    for (uint8_t i = 0; i < 7; i++)
+    {
+        key_state[i] = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
+        is_key_triggered[i] = false;
+        key_was_target[i] = false;
+        key_target_round[i] = 0;
+        key_stable_cnt[i] = 0;
+    }
 
-//             //关卡选择
-//             case LEVEL_SEL:
-//                 play_prog1 = LEVEL_ADDR0 + level * LEVEL_LEN;
-//                 OLED_Clear();
-//                 OLED_ShowChinese(1, 3, 2);
-//                 OLED_ShowNum(1, 7, level + 1, 1);
-//                 OLED_ShowChinese(1, 5, 3);
+    game_state = WELCOME;
+    buffer_state = IDLE_BUF2;
+    diff_sel_state = IDLE;
+    key_result = HIT;
+    difficulty = 0;
+    level = 0;
+    game_prog = 0;
+    play_prog1 = WELCOME_ADDR;
+    play_prog2 = 0;
+    gRandomSeed = 1;
+    gTargetRound = 0;
+    gTargetMask = 0;
+    gHitMask = 0;
+    gRoundActive = false;
+    gScoreDirty = false;
+    gWelcomeLedStep = 0;
+    gWelcomeLastTick = 0xFF;
+    ClearAllLEDs();
+    OLED_ShowCoverIMG();
+    DL_Timer_startCounter(TIMER_PROG_INST);
+    StartDMA();
 
-//                 OLED_ShowChinese(2, 2, 11);
-//                 OLED_ShowChinese(2, 3, 12);
-//                 OLED_ShowChar(2, 8, ':');
-//                 OLED_ShowNum(2, 10, TARGET_SCORE[difficulty][level], 3);
+    while (1)
+    {
+        switch (game_state)
+        {
+            case WELCOME:
+                while (play_prog1 < WELCOME_ADDR + WELCOME_LEN &&
+                    game_prog < WELCOME_DURATION_TICKS)
+                {
+                    FillBuffer();
+                    UpdateWelcomeLEDs();
+                }
+                DL_Timer_stopCounter(TIMER_PROG_INST);
+                game_prog = 0;
+                DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                ShowDifficultyScreen();
+                ClearKeyEvents();
+                DL_Timer_startCounter(TIMER_KEYs_INST);
+                game_state = DIFF_SEL;
+                break;
 
-//                 OLED_ShowChinese(3, 2, 13);
-//                 OLED_ShowChinese(3, 3, 14);
-//                 OLED_ShowChar(3, 8, ':');
-//                 OLED_ShowNum(3, 10, score, 3);
-//                 game_state = LEVEL_SEL_BUSY;
-//                 StartDMA();
-//             break;
+            case DIFF_SEL:
+                if (diff_sel_state == BUSY)
+                {
+                    while (play_prog1 < DIFF_ADDR0 + (difficulty + 1) * DIFF_LEN)
+                    {
+                        FillBuffer();
+                    }
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                    ClearKeyEvents();
+                    DL_Timer_startCounter(TIMER_KEYs_INST);
+                    diff_sel_state = SELECTED;
+                }
+                else if (diff_sel_state == CONFIRMED)
+                {
+                    while (play_prog1 < START_ADDR + START_LEN)
+                    {
+                        FillBuffer();
+                        UpdateConfirmLED();
+                    }
+                    DL_Timer_stopCounter(TIMER_PROG_INST);
+                    game_prog = 0;
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                    DL_Timer_setLoadValue(TIMER_LEDs_INST, SPEED[difficulty]);
+                    ClearAllLEDs();
+                    level = 0;
+                    score = 0;
+                    diff_sel_state = IDLE;
+                    game_state = LEVEL_SEL;
+                }
+                else
+                {
+                    for (uint8_t i = 0; i < 7; i++)
+                    {
+                        if (!is_key_triggered[i])
+                        {
+                            continue;
+                        }
+                        ClearKeyEvents();
+                        DL_Timer_stopCounter(TIMER_KEYs_INST);
+                        if (diff_sel_state == SELECTED && i == difficulty)
+                        {
+                            play_prog1 = START_ADDR;
+                            diff_sel_state = CONFIRMED;
+                            game_prog = 0;
+                            gConfirmLastTick = 0xFF;
+                            DL_Timer_startCounter(TIMER_PROG_INST);
+                        }
+                        else
+                        {
+                            play_prog1 = DIFF_ADDR0 + i * DIFF_LEN;
+                            difficulty = i;
+                            ShowOnlyLED(i);
+                            OLED_ShowNum(1, 11, i + 1, 1);
+                            diff_sel_state = BUSY;
+                        }
+                        StartDMA();
+                        break;
+                    }
+                }
+                break;
 
-//             //开始音乐播放
-//             case LEVEL_SEL_BUSY:
-//                 while (play_prog1 < LEVEL_ADDR0 + (level + 1) * LEVEL_LEN)
-//                     FillBuffer();
-//                 DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                 DL_Timer_startCounter(TIMER_KEYs_INST);
-//                 game_state = PLAYING;
-//                 play_prog1 = BGM_ADDR;
-//                 srand((unsigned)time(NULL));
-//                 DL_Timer_startCounter(TIMER_LEDs_INST);
-//                 DL_Timer_startCounter(TIMER_PROG_INST);
-//                 OLED_SetCursor(7, 0);
-//                 StartDMA();
-//             break;
+            case LEVEL_SEL:
+                play_prog1 = LEVEL_ADDR0 + level * LEVEL_LEN;
+                OLED_Clear();
+                OLED_ShowChinese(1, 1, 2);
+                OLED_ShowChinese(1, 3, 3);
+                OLED_ShowNum(1, 4, level + 1, 1);
+                OLED_ShowChinese(1, 5, 11);
+                OLED_ShowChinese(1, 6, 12);
+                OLED_ShowChar(1, 13, ':');
+                OLED_ShowNum(1, 14, TARGET_SCORE[difficulty][level], 3);
+                OLED_ShowChinese(2, 5, 13);
+                OLED_ShowChinese(2, 6, 14);
+                OLED_ShowChar(2, 13, ':');
+                OLED_ShowNum(2, 14, score, 3);
+                game_state = LEVEL_SEL_BUSY;
+                StartDMA();
+                break;
 
-//             //开始游戏
-//             case PLAYING:
-//                 if (play_prog1 >= BGM_ADDR + BGM_LEN)
-//                     play_prog1 = BGM_ADDR;
-//                 FillBuffer();
-//                 if (game_prog >= 120){
-//                     DL_Timer_stopCounter(TIMER_KEYs_INST);
-//                     DL_Timer_stopCounter(TIMER_LEDs_INST);
-//                     DL_Timer_stopCounter(TIMER_PROG_INST);
-//                     game_prog = 0;
-//                     for (uint8_t i = 0; i < 7; i++)
-//                         DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-//                     target1 = 8;
-//                     target2 = 8;
-//                     game_state = GAME_OVER;
-//                     DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                     StartDMA();
-//                 }
-//             break;
+            case LEVEL_SEL_BUSY:
+                while (play_prog1 < LEVEL_ADDR0 + (level + 1) * LEVEL_LEN)
+                {
+                    FillBuffer();
+                }
+                DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                ClearKeyEvents();
+                ClearAllLEDs();
+                game_prog = 0;
+                ResetProgressBar();
+                play_prog1 = GetBgmAddr();
+                SpawnTargets();
+                DL_Timer_startCounter(TIMER_KEYs_INST);
+                DL_Timer_startCounter(TIMER_LEDs_INST);
+                DL_Timer_startCounter(TIMER_PROG_INST);
+                game_state = PLAYING;
+                StartDMA();
+                break;
 
-//             //游戏结束
-//             case GAME_OVER:
-//                 OLED_Clear();
-//                 if (score >= TARGET_SCORE[difficulty][level]){
-//                     if (level < 2){
-//                         play_prog1 = WIN_ADDR;
-//                         while (play_prog1 < WIN_ADDR + WIN_LEN)
-//                             FillBuffer();
-//                         DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                         level++;
-//                         game_state = LEVEL_SEL;
-//                     }
-//                     else{
-//                         play_prog1 = WIN_ALL_ADDR;
-//                         while (play_prog1 < WIN_ALL_ADDR + WIN_ALL_LEN)
-//                             FillBuffer();
-//                         DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                         game_state = DIFF_SEL;
-//                     }
-//                 }
-//                 else{
-//                     play_prog1 = LOSE_ADDR;
-//                     while (play_prog1 < LOSE_ADDR + LOSE_LEN)
-//                         FillBuffer();
-//                     DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
-//                     game_state = DIFF_SEL;
-//                 }
-//             break;
-//             default:break;
-//         }
-//     }
-// }
+            case PLAYING:
+                if (play_prog1 >= GetBgmAddr() + BGM_LEN)
+                {
+                    play_prog1 = GetBgmAddr();
+                }
+                ProcessGameKeys();
+                FillBuffer();
+                if (gScoreDirty)
+                {
+                    OLED_ShowNum(2, 14, score, 3);
+                    gScoreDirty = false;
+                }
+                UpdateProgressBar();
+                if (game_prog >= GAME_DURATION_TICKS)
+                {
+                    DL_Timer_stopCounter(TIMER_KEYs_INST);
+                    DL_Timer_stopCounter(TIMER_LEDs_INST);
+                    DL_Timer_stopCounter(TIMER_PROG_INST);
+                    DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                    ClearKeyEvents();
+                    ClearAllLEDs();
+                    game_prog = 0;
+                    game_state = GAME_OVER;
+                }
+                break;
 
-// void DAC12_IRQHandler(){
-//     switch (DAC12_INT_IRQN){
-//         case DL_DAC12_IIDX_DMA_DONE:
-//             if (buffer_state == IDLE_BUF1)
-//                 buffer_state = FILL_BUF2;
-//             else if (buffer_state == IDLE_BUF2)
-//                 buffer_state = FILL_BUF1;
-//         break;
-//         default:break;
-//     }
-// }
+            case GAME_OVER:
+                if (score >= TARGET_SCORE[difficulty][level])
+                {
+                    if (level < 2)
+                    {
+                        PlayResultAudio(WIN_ADDR, WIN_LEN, "WIN!!!");
+                        level++;
+                        game_state = LEVEL_SEL;
+                    }
+                    else
+                    {
+                        PlayResultAudio(
+                            WIN_ALL_ADDR, WIN_ALL_LEN, "WIN!!!");
+
+                        if (difficulty == 6U)
+                        {
+                            OLED_Clear();
+                            OLED_ShowString(1, 5, "Password:");
+                            OLED_ShowString(2, 7, "3618");
+                            play_prog1 = HIDDEN_WIN_ADDR;
+                            StartDMA();
+                            while (play_prog1 <
+                                HIDDEN_WIN_ADDR + HIDDEN_WIN_LEN)
+                            {
+                                FillBuffer();
+                            }
+                            DL_DMA_disableChannel(DMA, DMA_CH0_CHAN_ID);
+                            ClearKeyEvents();
+                            game_state = GAME_FINISHED;
+                            break;
+                        }
+
+                        diff_sel_state = IDLE;
+                        ShowDifficultyScreen();
+                        ClearKeyEvents();
+                        game_state = DIFF_SEL;
+                        DL_Timer_startCounter(TIMER_KEYs_INST);
+                    }
+                }
+                else
+                {
+                    PlayResultAudio(LOSE_ADDR, LOSE_LEN, "LOSE...");
+                    diff_sel_state = IDLE;
+                    ShowDifficultyScreen();
+                    ClearKeyEvents();
+                    game_state = DIFF_SEL;
+                    DL_Timer_startCounter(TIMER_KEYs_INST);
+                }
+                break;
+
+            case GAME_FINISHED:
+                break;
+
+            default:
+                game_state = WELCOME;
+                break;
+        }
+    }
+}
+#endif
+
+void DAC12_IRQHandler(void)
+{
+    if (DL_DAC12_getPendingInterrupt(DAC0) != DL_DAC12_IIDX_DMA_DONE)
+    {
+        return;
+    }
+
+    if (buffer_state == IDLE_BUF1)
+    {
+        buffer_state = FILL_BUF2;
+    }
+    else if (buffer_state == IDLE_BUF2)
+    {
+        buffer_state = FILL_BUF1;
+    }
+}
 
 void TIMER_KEYs_INST_IRQHandler(){
     switch (DL_Timer_getPendingInterrupt(TIMER_KEYs_INST)){
         case DL_TIMER_IIDX_ZERO:
         {
             bool current_state;
+            gRandomSeed++;
             for (uint8_t i = 0; i < 7; i++){
                 current_state = DL_GPIO_readPins((GPIO_Regs *)KEYs_PORT[i], KEYs_PIN[i]);
                 if (current_state == key_state[i])
@@ -911,8 +1244,14 @@ void TIMER_KEYs_INST_IRQHandler(){
                         key_state[i] = current_state;
                         key_stable_cnt[i] = 0;
                         if (current_state == KEY_PRESSED){
+                            uint8_t key_bit = (uint8_t)(1U << i);
+                            key_target_round[i] = gTargetRound;
+                            key_was_target[i] =
+                                (game_state == PLAYING) &&
+                                gRoundActive &&
+                                ((gTargetMask & key_bit) != 0U) &&
+                                ((gHitMask & key_bit) == 0U);
                             is_key_triggered[i] = true;
-                            DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
                         }
                     }
                 }
@@ -927,28 +1266,7 @@ void TIMER_KEYs_INST_IRQHandler(){
 void TIMER_LEDs_INST_IRQHandler(){
     switch (DL_Timer_getPendingInterrupt(TIMER_LEDs_INST)){
         case DL_TIMER_IIDX_ZERO:
-            
-            //DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[1], LEDs_PIN[1]);
-        
-        // is_LED_active = !is_LED_active;
-            // if (is_LED_active){
-            //     target1 = rand() % 7;
-            //     DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target1], LEDs_PIN[target1]);
-            //     if (difficulty >= 4){
-            //         do{
-            //             target2 = rand() % 7;
-            //         }while(target2 == target1);
-            //         DL_GPIO_setPins((GPIO_Regs *)LEDs_PORT[target2], LEDs_PIN[target2]);
-            //     }
-            //     else
-            //         target2 = 8;
-            // }
-            // else{
-            //     for (uint8_t i = 0; i < 7; i++)
-            //         DL_GPIO_clearPins((GPIO_Regs *)LEDs_PORT[i], LEDs_PIN[i]);
-            //     target1 = 8;
-            //     target2 = 8;
-            // }
+            SpawnTargets();
         break;
         default:break;
     }
@@ -957,11 +1275,10 @@ void TIMER_LEDs_INST_IRQHandler(){
 void TIMER_PROG_INST_IRQHandler(){
     switch (DL_Timer_getPendingInterrupt(TIMER_PROG_INST)){
         case DL_TIMER_IIDX_ZERO:
-            
-            //DL_GPIO_togglePins((GPIO_Regs *)LEDs_PORT[2], LEDs_PIN[2]);
-        
-            // game_prog++;
-            // OLED_WriteData(0xFF);
+            if (game_prog < GAME_DURATION_TICKS)
+            {
+                game_prog++;
+            }
         break;
         default:break;
     }

@@ -1,0 +1,22 @@
+Format: 8000 Hz, mono, signed 16-bit little-endian raw PCM
+Image size: 3430400 bytes (0x345800)
+
+welcome        offset=0x000000 size=  49152 duration=  3.072s source=welcome.mp3
+difficulty_1   offset=0x00C000 size=  16384 duration=  1.024s source=difficulty_1.mp3
+difficulty_2   offset=0x010000 size=  16384 duration=  1.024s source=difficulty_2.mp3
+difficulty_3   offset=0x014000 size=  16384 duration=  1.024s source=difficulty_3.mp3
+difficulty_4   offset=0x018000 size=  16384 duration=  1.024s source=difficulty_4.mp3
+difficulty_5   offset=0x01C000 size=  16384 duration=  1.024s source=difficulty_5.mp3
+difficulty_6   offset=0x020000 size=  16384 duration=  1.024s source=difficulty_6.mp3
+difficulty_7   offset=0x024000 size=  16384 duration=  1.024s source=difficulty_7.mp3
+start          offset=0x028000 size=  48128 duration=  3.008s source=start.mp3
+level_1        offset=0x033C00 size=  48128 duration=  3.008s source=level_1.mp3
+level_2        offset=0x03F800 size=  48128 duration=  3.008s source=level_2.mp3
+level_3        offset=0x04B400 size=  48128 duration=  3.008s source=level_3.mp3
+bgm_1          offset=0x057000 size= 960512 duration= 60.032s source=bgm_1.mp3
+bgm_2          offset=0x141800 size= 960512 duration= 60.032s source=bgm_2.mp3
+bgm_3          offset=0x22C000 size= 960512 duration= 60.032s source=bgm_3.mp3
+win            offset=0x316800 size=  48128 duration=  3.008s source=win.mp3
+lose           offset=0x322400 size=  48128 duration=  3.008s source=lose.mp3
+win_all        offset=0x32E000 size=  48128 duration=  3.008s source=win_all.mp3
+hidden_win     offset=0x339C00 size=  48128 duration=  3.008s source=hidden_win.mp3

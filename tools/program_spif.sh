@@ -6,8 +6,10 @@ set -euo pipefail
 # Example: ./tools/program_spif.sh tools/out/audio_pcm_8k_mono_s16le.pcm 0x000000
 #
 # Optional env vars:
-#   FLASH_CHIP="W25Q64.V"           # force chip model if auto-detect fails
+#   FLASH_CHIP="W25Q64JV-.Q"        # force the exact flashrom chip definition
 #   PROGRAMMER_OPTS="spispeed=250"  # slower SPI may help long Dupont wires
+#   FLASHROM_RETRIES=5              # retry when CH341 briefly disconnects
+#   FLASHROM_RETRY_DELAY=2          # seconds between retries
 
 if [ "$#" -lt 1 ]; then
   echo "Usage: $0 <input-file> [offset_hex]"
@@ -20,6 +22,8 @@ PROGRAMMER="ch341a_spi"
 PROGRAMMER_OPTS=${PROGRAMMER_OPTS:-}
 PROG_SPEC="${PROGRAMMER}${PROGRAMMER_OPTS:+:${PROGRAMMER_OPTS}}"
 FLASH_CHIP=${FLASH_CHIP:-}
+FLASHROM_RETRIES=${FLASHROM_RETRIES:-5}
+FLASHROM_RETRY_DELAY=${FLASHROM_RETRY_DELAY:-2}
 BACKUP_FILE="tools/backup_flash_$(date +%Y%m%d_%H%M%S).bin"
 
 command -v flashrom >/dev/null 2>&1 || { echo "flashrom not found in PATH. Install it first (brew install flashrom)"; exit 2; }
@@ -32,11 +36,35 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 run_flashrom() {
-  if [ -n "$FLASH_CHIP" ]; then
-    "${RUN[@]}" -p "$PROG_SPEC" -c "$FLASH_CHIP" "$@"
-  else
-    "${RUN[@]}" -p "$PROG_SPEC" "$@"
-  fi
+  local attempt=1
+  local status
+
+  while [ "$attempt" -le "$FLASHROM_RETRIES" ]; do
+    set +e
+    if [ -n "$FLASH_CHIP" ]; then
+      "${RUN[@]}" -p "$PROG_SPEC" -c "$FLASH_CHIP" "$@"
+      status=$?
+    else
+      "${RUN[@]}" -p "$PROG_SPEC" "$@"
+      status=$?
+    fi
+    set -e
+
+    if [ "$status" -eq 0 ]; then
+      return 0
+    fi
+
+    if [ "$attempt" -lt "$FLASHROM_RETRIES" ]; then
+      echo
+      echo "flashrom failed (attempt $attempt/$FLASHROM_RETRIES)."
+      echo "Waiting ${FLASHROM_RETRY_DELAY}s for CH341 to reconnect..."
+      sleep "$FLASHROM_RETRY_DELAY"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "flashrom failed after $FLASHROM_RETRIES attempts."
+  return "$status"
 }
 
 echo "Input file: $INPUT_FILE"
@@ -49,7 +77,20 @@ else
 fi
 
 echo "Probing flash chip first..."
-run_flashrom --flash-name
+if ! run_flashrom --flash-name; then
+  if [ -z "$FLASH_CHIP" ]; then
+    echo
+    echo "Flash auto-detection failed or matched multiple definitions."
+    echo "Read the marking printed on the SPI flash package, then rerun with"
+    echo "the matching flashrom definition, for example:"
+    echo
+    echo "  FLASH_CHIP='W25Q64JV-.Q' $0 '$INPUT_FILE' '$OFFSET'"
+    echo "  FLASH_CHIP='W25Q64BV/W25Q64CV/W25Q64FV' $0 '$INPUT_FILE' '$OFFSET'"
+    echo
+    echo "Do not guess if the package marking is visible."
+  fi
+  exit 1
+fi
 
 echo "Backing up entire chip to $BACKUP_FILE (may take a while)..."
 run_flashrom -r "$BACKUP_FILE"

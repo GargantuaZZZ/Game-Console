@@ -282,12 +282,63 @@ void OLED_ShowBinNum(uint8_t Line, uint8_t Column, uint32_t Number, uint8_t Leng
 */
 void OLED_ShowChinese(uint8_t Line, uint8_t Column, uint8_t ID){
 	uint8_t i;
-	OLED_SetCursor((Line - 1) * 2, (Column - 1) * 16);		//设置光标位置在上半部分
+	uint8_t X = (Column - 1) * 16;
+
+	if (ID >= 4)
+	{
+		/*
+		 * The 12x12 glyphs are stored in a 16-byte page with two padding
+		 * columns between their left and right halves. Skip that padding,
+		 * then center the glyph in its 16x16 character cell.
+		 */
+		OLED_SetCursor((Line - 1) * 2, X);
+		for (i = 0; i < 16; i++)
+		{
+			if ((i < 2) || (i >= 14))
+			{
+				OLED_WriteData(0x00);
+			}
+			else
+			{
+				uint8_t glyphColumn = i - 2;
+				uint8_t sourceColumn = glyphColumn < 6 ?
+					glyphColumn : glyphColumn + 2;
+				uint16_t columnBits =
+					(uint16_t)CHINESE[ID][sourceColumn] |
+					((uint16_t)CHINESE[ID][sourceColumn + 16] << 8);
+
+				OLED_WriteData((uint8_t)(columnBits << 2));
+			}
+		}
+
+		OLED_SetCursor((Line - 1) * 2 + 1, X);
+		for (i = 0; i < 16; i++)
+		{
+			if ((i < 2) || (i >= 14))
+			{
+				OLED_WriteData(0x00);
+			}
+			else
+			{
+				uint8_t glyphColumn = i - 2;
+				uint8_t sourceColumn = glyphColumn < 6 ?
+					glyphColumn : glyphColumn + 2;
+				uint16_t columnBits =
+					(uint16_t)CHINESE[ID][sourceColumn] |
+					((uint16_t)CHINESE[ID][sourceColumn + 16] << 8);
+
+				OLED_WriteData((uint8_t)(columnBits >> 6));
+			}
+		}
+		return;
+	}
+
+	OLED_SetCursor((Line - 1) * 2, X);		//设置光标位置在上半部分
 	for (i = 0; i < 16; i++)
 	{
 		OLED_WriteData(CHINESE[ID][i]);						//显示上半部分内容
 	}
-	OLED_SetCursor((Line - 1) * 2 + 1, (Column - 1) * 16);	//设置光标位置在下半部分
+	OLED_SetCursor((Line - 1) * 2 + 1, X);	//设置光标位置在下半部分
 	for (i = 0; i < 16; i++)
 	{
 		OLED_WriteData(CHINESE[ID][i + 16]);				//显示下半部分内容
